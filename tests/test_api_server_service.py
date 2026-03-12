@@ -4,19 +4,18 @@ from workers.api_server.app.service import ApiServerService
 class DummyClient:
     def __init__(self):
         self.calls = []
-        self.status_payload = {"active": True, "reason": "in_shift"}
+        self.status_payload = {"success": True, "market": "xag", "is_open": True, "active": True, "reason": "in_shift"}
 
     def post(self, path, body):
         self.calls.append(("post", path, body))
+        if path == "/room/status":
+            return self.status_payload
         return {"success": True, "path": path, "body": body}
 
     def get(self, path):
         self.calls.append(("get", path, None))
         return {"success": True, "path": path}
 
-    def get_absolute(self, url):
-        self.calls.append(("get_absolute", url, None))
-        return self.status_payload
 
 
 class DummyConfig:
@@ -44,7 +43,7 @@ def test_api_server_service_routes_to_workers():
 
 def test_room_action_blocks_when_room_is_closed():
     room = DummyClient()
-    room.status_payload = {"active": True, "reason": "out_of_shift"}
+    room.status_payload = {"success": True, "market": "xag", "is_open": False, "active": True, "reason": "out_of_shift"}
     service = ApiServerService(DummyConfig(), DummyClient(), room, DummyClient())
 
     result = service.execute(
@@ -63,6 +62,13 @@ def test_room_action_blocks_when_room_is_closed():
 
 def test_room_action_sets_room_prefix_from_market():
     room = DummyClient()
+    room.status_payload = {
+        "success": True,
+        "market": "mazaneh",
+        "is_open": True,
+        "active": True,
+        "reason": "in_shift",
+    }
     service = ApiServerService(DummyConfig(), DummyClient(), room, DummyClient())
 
     service.execute(
@@ -79,3 +85,29 @@ def test_room_action_sets_room_prefix_from_market():
     assert method == "post"
     assert path == "/room/orders"
     assert body["room_prefix"] == "/mazaneh"
+
+
+
+def test_room_status_proxies_to_room_worker():
+    room = DummyClient()
+    room.status_payload = {
+        "success": True,
+        "market": "ounce",
+        "is_open": True,
+        "active": True,
+        "reason": "in_shift",
+    }
+    service = ApiServerService(DummyConfig(), DummyClient(), room, DummyClient())
+
+    result = service.execute(
+        "check_room_status",
+        {"mobile": "0912", "base_domain": "https://demo.hivagold.com", "market": "ounce"},
+    )
+
+    assert result["success"] is True
+    assert result["market"] == "ounce"
+    assert room.calls[-1] == (
+        "post",
+        "/room/status",
+        {"mobile": "0912", "market": "ounce", "base_domain": "https://demo.hivagold.com"},
+    )

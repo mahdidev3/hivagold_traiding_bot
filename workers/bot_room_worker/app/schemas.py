@@ -113,3 +113,15 @@ class ClosePortfolioResponse(WorkerBaseResponse):
     portfolio: Optional[Dict[str, Any]] = None
     closed_orders: Optional[list[str]] = None
     closed_transactions: Optional[list[str]] = None
+
+
+class RoomStatusRequest(RoomBaseRequest):
+    market: str = "xag"
+
+
+class RoomStatusResponse(WorkerBaseResponse):
+    market: str
+    is_open: bool
+    active: Optional[bool] = None
+    reason: Optional[str] = None
+    notification: Optional[str] = None

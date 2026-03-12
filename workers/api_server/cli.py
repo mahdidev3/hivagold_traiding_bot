@@ -34,6 +34,7 @@ def main():
     signals_parser.add_argument("--latest", action="store_true")
 
     room_status_parser = subparsers.add_parser("room-status")
+    room_status_parser.add_argument("--mobile", required=True)
     room_status_parser.add_argument("--base-domain", default="https://demo.hivagold.com")
     room_status_parser.add_argument("--market", default="xag", choices=["xag", "mazaneh", "ounce"])
 
@@ -85,7 +86,7 @@ def main():
         return
 
     if args.command == "room-status":
-        payload = {"base_domain": args.base_domain, "market": args.market}
+        payload = {"mobile": args.mobile, "base_domain": args.base_domain, "market": args.market}
         response = requests.post(f"{args.server}/room/status", json=payload, timeout=30)
         _print_response(response)
         return

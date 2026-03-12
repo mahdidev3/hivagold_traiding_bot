@@ -25,6 +25,8 @@ from .schemas import (
     GetTransactionsRequest,
     GetTransactionsResponse,
     HealthResponse,
+    RoomStatusRequest,
+    RoomStatusResponse,
 )
 from .service import (
     CreateActivePortfolioService,
@@ -36,6 +38,7 @@ from .service import (
     GetPortfoliosService,
     GetTransactionsService,
     RoomWorkerService,
+    CheckRoomStatusService,
 )
 
 config = get_config()
@@ -65,6 +68,7 @@ close_portfolio_service = ClosePortfolioService(
     redis_client,
     logger,
 )
+check_room_status_service = CheckRoomStatusService(config, redis_client, logger)
 
 room_worker_service = RoomWorkerService(
     get_portfolios_service=get_portfolios_service,
@@ -75,6 +79,7 @@ room_worker_service = RoomWorkerService(
     get_transactions_service=get_transactions_service,
     close_transaction_service=close_transaction_service,
     close_portfolio_service=close_portfolio_service,
+    check_room_status_service=check_room_status_service,
     logger=logger,
 )
 queue_manager = RoomQueueManager(room_worker_service, logger)
@@ -101,6 +106,19 @@ def _raise_if_failed(result: dict) -> None:
         raise HTTPException(
             status_code=400, detail=result.get("error", "Unknown error")
         )
+
+
+@app.post("/room/status", response_model=RoomStatusResponse)
+async def room_status(request: RoomStatusRequest):
+    try:
+        logger.debug("Received room_status request mobile=%s", request.mobile)
+        args = request.model_dump(exclude_none=True)
+        args["worker_action"] = "check_room_status"
+        result = await queue_manager.enqueue(args)
+        return RoomStatusResponse(**result)
+    except Exception as exc:
+        logger.error(f"Error in room_status endpoint: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/health", response_model=HealthResponse)
