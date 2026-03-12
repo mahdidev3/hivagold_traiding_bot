@@ -1,5 +1,6 @@
 import os
 from dataclasses import dataclass
+from urllib.parse import urljoin
 
 
 @dataclass
@@ -22,22 +23,18 @@ class Config:
         os.getenv("MAIN_API_RETRY_DELAY_SECONDS", "1.5")
     )
 
-    DEFAULT_BASE_DOMAIN: str = os.getenv("BASE_URL", "http://demo.hivagold.com")
-    DEFAULT_LOGIN_URL: str = os.getenv(
-        "LOGIN_URL", "http://demo.hivagold.com/api/user/api/auth/login/"
+    DEFAULT_BASE_DOMAIN: str = os.getenv("BASE_DOMAIN", "http://demo.hivagold.com")
+
+    LOGIN_PATH: str = os.getenv("LOGIN_PATH", "/api/user/api/auth/login/")
+    CAPTCHA_INFO_PATH: str = os.getenv(
+        "CAPTCHA_INFO_PATH", "/api/user/api/captcha-image/"
     )
-    DEFAULT_GET_CAPTCHA_INFO_URL: str = os.getenv(
-        "GET_CAPTCHA_INFO_URL", "http://demo.hivagold.com/api/user/api/captcha-image/"
+    CAPTCHA_IMAGE_BASE_PATH: str = os.getenv("CAPTCHA_IMAGE_BASE_PATH", "/api")
+    VERIFY_CAPTCHA_PATH: str = os.getenv(
+        "VERIFY_CAPTCHA_PATH", "/api/user/api/captcha-verify/"
     )
-    DEFAULT_GET_CAPTCHA_IMAGE_BASE_URL: str = os.getenv(
-        "GET_CAPTCHA_IMAGE_BASE_URL", "http://demo.hivagold.com/api"
-    )
-    DEFAULT_VERIFY_CAPTCHA_URL: str = os.getenv(
-        "VERIFY_CAPTCHA_URL", "http://demo.hivagold.com/api/user/api/captcha-verify/"
-    )
-    DEFAULT_COOKIES_VALIDATION_URL: str = os.getenv(
-        "COOKIES_VALIDATION_URL",
-        "http://demo.hivagold.com/api/profile/api/tether-rate/",
+    COOKIES_VALIDATION_PATH: str = os.getenv(
+        "COOKIES_VALIDATION_PATH", "/api/profile/api/tether-rate/"
     )
 
     AUTH_WORKER_PORT: int = int(os.getenv("AUTH_WORKER_PORT", "8002"))
@@ -60,3 +57,8 @@ class Config:
 
 def get_config() -> Config:
     return Config()
+
+
+def build_api_url(base_domain: str, path: str) -> str:
+    base = (base_domain or "").rstrip("/") + "/"
+    return urljoin(base, (path or "").lstrip("/"))
