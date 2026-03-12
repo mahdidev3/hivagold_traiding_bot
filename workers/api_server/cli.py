@@ -49,6 +49,7 @@ def main():
             "transactions",
             "transaction-close",
             "portfolio-close",
+            "portfolio-create",
         ],
     )
     add_common_room_args(room_parser)

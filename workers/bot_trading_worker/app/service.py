@@ -396,11 +396,11 @@ class TradingWorkerService:
             )
         )
 
-    async def _on_open_live(self, ws) -> Optional[asyncio.Task]:
+    async def _on_open_live(self, ws: Any) -> Optional[asyncio.Task]:
         await ws.send(json.dumps(LIVE_SUB_MESSAGE, ensure_ascii=False))
         return None
 
-    async def _on_open_price(self, ws) -> Optional[asyncio.Task]:
+    async def _on_open_price(self, ws: Any) -> Optional[asyncio.Task]:
         async def ping_loop():
             while True:
                 await asyncio.sleep(30)

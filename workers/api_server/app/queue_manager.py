@@ -1,7 +1,11 @@
 import asyncio
 from dataclasses import dataclass
 import logging
-from typing import Any, Optional
+from typing import Any, Optional, Protocol
+
+
+class ApiServiceProtocol(Protocol):
+    def execute(self, action: str, payload: dict[str, Any]) -> dict[str, Any]: ...
 
 
 @dataclass
@@ -12,7 +16,7 @@ class ApiJob:
 
 
 class ApiQueueManager:
-    def __init__(self, service, logger: logging.Logger):
+    def __init__(self, service: ApiServiceProtocol, logger: logging.Logger):
         self.queue: asyncio.Queue[ApiJob] = asyncio.Queue()
         self.service = service
         self.logger = logger

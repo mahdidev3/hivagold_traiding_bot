@@ -25,7 +25,7 @@ async def _run_test():
     service = TradingWorkerService(DummyConfig(), DummyRedis(), DummyMarket())
     published = []
 
-    async def fake_publish(signal):
+    async def fake_publish(signal: dict):
         published.append(signal)
 
     service._publish_signal = fake_publish

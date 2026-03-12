@@ -26,6 +26,15 @@ tests/
 
 ---
 
+## Service Responsibilities
+
+- **api_server**: public HTTP API, request validation, and queue-based dispatch to workers.
+- **bot_auth_worker**: login/logout session handling and captcha verification flow.
+- **bot_room_worker**: portfolio/order/transaction management endpoints against Hivagold room APIs.
+- **bot_trading_worker**: market signal generation and websocket signal broadcasting.
+- **bot_captcha_worker**: dedicated captcha solving endpoint used by auth flow.
+- **redis_worker**: shared cache/session store used by all workers.
+
 ## Prerequisites
 
 - Python **3.11+**
@@ -208,7 +217,7 @@ curl -X POST http://localhost:8000/room/status \
   -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag"}'
 ```
 
-Room actions (`portfolios`, `orders`, `order-create`, `order-close`, `transactions`, `transaction-close`, `portfolio-close`) also require a valid login session for the same mobile:
+Room actions (`portfolios`, `orders`, `order-create`, `order-close`, `transactions`, `transaction-close`, `portfolio-close`, `portfolio-create`) also require a valid login session for the same mobile:
 
 ```bash
 curl -X POST http://localhost:8000/room/orders \
@@ -216,6 +225,18 @@ curl -X POST http://localhost:8000/room/orders \
   -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag"}'
 ```
 
+Create active portfolio:
+
+```bash
+curl -X POST http://localhost:8000/portfolio/create \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag"}'
+
+# equivalent dynamic room action route
+curl -X POST http://localhost:8000/room/portfolio-create \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag"}'
+```
 
 More room examples:
 
@@ -264,6 +285,7 @@ curl -X POST http://localhost:8000/room/portfolio-close \
 - `POST /room/transactions`
 - `POST /room/transaction-close`
 - `POST /room/portfolio-close`
+- `POST /room/portfolio-create`
 
 ## 6) Built-in API CLI commands
 
@@ -283,6 +305,7 @@ python cli.py room order-close --mobile 0912xxxxxxx --order-id <id>
 python cli.py room transactions --mobile 0912xxxxxxx
 python cli.py room transaction-close --mobile 0912xxxxxxx --transaction-id <id>
 python cli.py room portfolio-close --mobile 0912xxxxxxx --portfolio-id <id>
+python cli.py room portfolio-create --mobile 0912xxxxxxx
 ```
 
 ---

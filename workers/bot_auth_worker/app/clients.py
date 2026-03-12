@@ -76,7 +76,7 @@ class MainApiClient:
         url: str,
         cookies: Optional[dict] = None,
         headers: Optional[dict] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> requests.Response:
         last_exc: Optional[Exception] = None
         timeout = kwargs.pop("timeout", (self.connect_timeout, self.read_timeout))

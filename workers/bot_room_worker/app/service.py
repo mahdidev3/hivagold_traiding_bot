@@ -304,10 +304,6 @@ class CreateOrderService(BaseRoomService):
             create_url = _build_room_url(
                 base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/order/create/"
             )
-            self.logger.debug("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
-            self.logger.debug(cookies)
-            self.logger.debug(headers)
-            self.logger.debug("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
             order = self.orders_client.create_order(
                 create_url=create_url,
                 order_type=order_type,

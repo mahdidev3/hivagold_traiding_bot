@@ -146,7 +146,7 @@ async def get_portfolios(request: GetPortfoliosRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@app.post("/room/portfolios/active", response_model=CreateActivePortfolioResponse)
+@app.post("/room/portfolio/create", response_model=CreateActivePortfolioResponse)
 async def create_active_portfolio(request: CreateActivePortfolioRequest):
     try:
         logger.debug(
