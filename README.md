@@ -200,15 +200,15 @@ Latest signals:
 curl http://localhost:8000/signals/latest
 ```
 
-Room status:
+Room status (**requires a logged-in mobile because it uses stored cookies + headers from Redis**):
 
 ```bash
 curl -X POST http://localhost:8000/room/status \
   -H "Content-Type: application/json" \
-  -d '{"base_domain":"https://demo.hivagold.com","market":"xag"}'
+  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag"}'
 ```
 
-Room actions (`portfolios`, `orders`, `order-create`, `order-close`, `transactions`, `transaction-close`, `portfolio-close`):
+Room actions (`portfolios`, `orders`, `order-create`, `order-close`, `transactions`, `transaction-close`, `portfolio-close`) also require a valid login session for the same mobile:
 
 ```bash
 curl -X POST http://localhost:8000/room/orders \
@@ -216,7 +216,54 @@ curl -X POST http://localhost:8000/room/orders \
   -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag"}'
 ```
 
+
+More room examples:
+
+```bash
+# create order
+curl -X POST http://localhost:8000/room/order-create \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag","payload":{"order_type":"market","action":"buy","units":1}}'
+
+# close order
+curl -X POST http://localhost:8000/room/order-close \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag","payload":{"order_id":"12345"}}'
+
+# list transactions
+curl -X POST http://localhost:8000/room/transactions \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag"}'
+
+# close transaction
+curl -X POST http://localhost:8000/room/transaction-close \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag","payload":{"transaction_id":"987"}}'
+
+# close portfolio
+curl -X POST http://localhost:8000/room/portfolio-close \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag","payload":{"portfolio_id":"456"}}'
+```
+
 ---
+
+
+### Endpoint summary (API Server)
+
+- `GET /health`
+- `POST /login`
+- `POST /logout`
+- `GET /signals/latest`
+- `POST /portfolio/create`
+- `POST /room/status`
+- `POST /room/portfolios`
+- `POST /room/orders`
+- `POST /room/order-create`
+- `POST /room/order-close`
+- `POST /room/transactions`
+- `POST /room/transaction-close`
+- `POST /room/portfolio-close`
 
 ## 6) Built-in API CLI commands
 
@@ -228,7 +275,7 @@ python cli.py --help
 python cli.py login --mobile 0912xxxxxxx --password your-password
 python cli.py logout --mobile 0912xxxxxxx
 python cli.py signals --latest
-python cli.py room-status --base-domain https://demo.hivagold.com --market xag
+python cli.py room-status --mobile 0912xxxxxxx --base-domain https://demo.hivagold.com --market xag
 python cli.py room portfolios --mobile 0912xxxxxxx
 python cli.py room orders --mobile 0912xxxxxxx
 python cli.py room order-create --mobile 0912xxxxxxx --action-side buy --order-type market --units 1

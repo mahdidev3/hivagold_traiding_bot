@@ -3,7 +3,6 @@ from typing import Any
 import requests
 
 from config import Config
-from .clients import build_market_status_url
 
 
 class ApiServerService:
@@ -21,23 +20,12 @@ class ApiServerService:
             )
         return selected
 
-    def room_status(self, base_domain: str, market: str | None) -> dict[str, Any]:
+    def room_status(self, mobile: str, base_domain: str | None, market: str | None) -> dict[str, Any]:
         selected_market = self._normalize_market(market)
-        status_url = build_market_status_url(base_domain, selected_market)
-        payload = self.room_client.get_absolute(status_url)
-
-        active = payload.get("active")
-        reason = payload.get("reason")
-        is_open = bool(active) and reason != "out_of_shift"
-
-        return {
-            "success": True,
-            "market": selected_market,
-            "is_open": is_open,
-            "active": active,
-            "reason": reason,
-            "notification": payload.get("notification"),
-        }
+        payload = {"mobile": mobile, "market": selected_market}
+        if base_domain:
+            payload["base_domain"] = base_domain
+        return self.room_client.post("/room/status", payload)
 
     def execute(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
         if action == "login":
@@ -49,11 +37,11 @@ class ApiServerService:
         if action == "get_signals":
             return self.trading_client.get("/signals/latest")
         if action == "check_room_status":
-            return self.room_status(payload["base_domain"], payload.get("market"))
+            return self.room_status(payload["mobile"], payload.get("base_domain"), payload.get("market"))
         if action == "room_action":
             endpoint = payload.pop("endpoint")
             try:
-                room_status = self.room_status(payload["base_domain"], payload.get("market"))
+                room_status = self.room_status(payload["mobile"], payload.get("base_domain"), payload.get("market"))
                 if not room_status["is_open"]:
                     return {
                         "success": False,

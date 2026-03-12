@@ -2,6 +2,8 @@ import logging
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
+import requests
+
 from config import Config
 from .clients import (
     HivagoldRedisClient,
@@ -75,6 +77,64 @@ class BaseRoomService:
                 "Cookies not found in session. Please login again.",
             )
         return resolved_base_domain, cookies, headers, None
+
+
+class CheckRoomStatusService(BaseRoomService):
+    async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        try:
+            mobile = args.get("mobile")
+            market = (args.get("market") or "xag").strip().lower()
+            if market not in {"xag", "mazaneh", "ounce"}:
+                return {
+                    "success": False,
+                    "market": market,
+                    "is_open": False,
+                    "error": "Unsupported market. Allowed values: xag, mazaneh, ounce",
+                }
+
+            base_domain, cookies, headers, error = self._load_session(
+                mobile, args.get("base_domain")
+            )
+            if error:
+                return {
+                    "success": False,
+                    "market": market,
+                    "is_open": False,
+                    "error": error,
+                }
+
+            status_url = _build_room_url(base_domain, f"/{market}", "/api/status/")
+            response = requests.get(status_url, cookies=cookies, headers=headers, timeout=10)
+            response.raise_for_status()
+            payload = response.json()
+
+            active = payload.get("active")
+            reason = payload.get("reason")
+            is_open = bool(active) and reason != "out_of_shift"
+            return {
+                "success": True,
+                "market": market,
+                "is_open": is_open,
+                "active": active,
+                "reason": reason,
+                "notification": payload.get("notification"),
+            }
+        except requests.RequestException as exc:
+            self.logger.error(f"Error checking room status: {exc}")
+            return {
+                "success": False,
+                "market": (args.get("market") or "xag").strip().lower(),
+                "is_open": False,
+                "error": f"Room status request failed: {exc}",
+            }
+        except Exception as exc:
+            self.logger.error(f"Unexpected error checking room status: {exc}")
+            return {
+                "success": False,
+                "market": (args.get("market") or "xag").strip().lower(),
+                "is_open": False,
+                "error": str(exc),
+            }
 
 
 class GetPortfoliosService(BaseRoomService):
@@ -561,6 +621,7 @@ class RoomWorkerService:
         get_transactions_service: GetTransactionsService,
         close_transaction_service: CloseTransactionService,
         close_portfolio_service: ClosePortfolioService,
+        check_room_status_service: CheckRoomStatusService,
         logger: logging.Logger,
     ):
         self.get_portfolios_service = get_portfolios_service
@@ -571,6 +632,7 @@ class RoomWorkerService:
         self.get_transactions_service = get_transactions_service
         self.close_transaction_service = close_transaction_service
         self.close_portfolio_service = close_portfolio_service
+        self.check_room_status_service = check_room_status_service
         self.logger = logger
 
     async def process(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -592,6 +654,8 @@ class RoomWorkerService:
                 return await self.close_transaction_service.execute(args)
             if action == "close_portfolio":
                 return await self.close_portfolio_service.execute(args)
+            if action == "check_room_status":
+                return await self.check_room_status_service.execute(args)
 
             return {"success": False, "error": f"Unknown action: {action}"}
         except Exception as exc:

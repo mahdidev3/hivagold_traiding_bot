@@ -35,7 +35,8 @@ class RoomActionRequest(BaseModel):
 
 
 class RoomStatusRequest(BaseModel):
-    base_domain: str
+    mobile: str
+    base_domain: Optional[str] = None
     market: str = "xag"
 
 
