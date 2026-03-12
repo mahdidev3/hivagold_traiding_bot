@@ -1,0 +1,27 @@
+services:
+  room-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: room-worker
+    env_file:
+      - .env
+    ports:
+      - "${ROOM_WORKER_PORT:-8005}:8005"
+    environment:
+      - ROOM_WORKER_HOST=0.0.0.0
+      - ROOM_WORKER_PORT=8005
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - hivagold
+
+networks:
+  hivagold:
+    name: hivagold
+    driver: bridge

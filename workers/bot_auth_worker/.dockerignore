@@ -1,0 +1,23 @@
+﻿__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+.venv/
+venv/
+.env
+.git
+.gitignore
+.dockerignore
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local/dev-only files not needed in image
+manage.ps1
+docker-compose.yaml
+README*

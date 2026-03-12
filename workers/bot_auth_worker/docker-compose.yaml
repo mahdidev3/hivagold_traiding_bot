@@ -1,0 +1,28 @@
+services:
+  auth-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bot-auth-worker:latest
+    container_name: bot-auth-worker
+    env_file:
+      - .env
+    ports:
+      - "${AUTH_WORKER_PORT:-8002}:8002"
+    environment:
+      - AUTH_WORKER_HOST=0.0.0.0
+      - AUTH_WORKER_PORT=8002
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - hivagold
+
+networks:
+  hivagold:
+    name: hivagold
+    driver: bridge

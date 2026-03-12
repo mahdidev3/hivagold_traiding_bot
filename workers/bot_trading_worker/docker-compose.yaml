@@ -1,0 +1,30 @@
+services:
+  trading-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bot-trading-worker:latest
+    container_name: trading-worker
+    env_file:
+      - .env
+    ports:
+      - "${TRADING_WORKER_PORT:-8006}:8006"
+    environment:
+      - TRADING_WORKER_HOST=0.0.0.0
+      - TRADING_WORKER_PORT=8006
+    volumes:
+      - ./users.json:/app/users.json:ro
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    restart: unless-stopped
+    networks:
+      - hivagold
+
+networks:
+  hivagold:
+    name: hivagold
+    driver: bridge

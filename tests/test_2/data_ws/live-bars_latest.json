@@ -1,0 +1,13 @@
+{
+  "stream": "live-bars",
+  "recv_ts": 1773088819.634839,
+  "raw": "{\"M\": \"hivagold\", \"FSYM\": \"ounce\", \"TSYM\": \"gold\", \"TYPE\": \"0\", \"TS\": \"1773088800\", \"P\": \"5137.09\"}",
+  "json": {
+    "M": "hivagold",
+    "FSYM": "ounce",
+    "TSYM": "gold",
+    "TYPE": "0",
+    "TS": "1773088800",
+    "P": "5137.09"
+  }
+}

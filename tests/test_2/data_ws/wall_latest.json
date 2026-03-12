@@ -1,0 +1,51 @@
+{
+  "stream": "wall",
+  "recv_ts": 1773088819.3258286,
+  "raw": "{\"sell\": [{\"price\": 5138.59, \"volume\": 22}, {\"price\": 5138.09, \"volume\": 9}, {\"price\": 5137.59, \"volume\": 25}, {\"price\": 5137.29, \"volume\": 13}, {\"price\": 5137.19, \"volume\": 7}], \"buy\": [{\"price\": 5136.99, \"volume\": 16}, {\"price\": 5136.89, \"volume\": 8}, {\"price\": 5136.59, \"volume\": 10}, {\"price\": 5136.09, \"volume\": 5}, {\"price\": 5135.59, \"volume\": 9}]}",
+  "json": {
+    "sell": [
+      {
+        "price": 5138.59,
+        "volume": 22
+      },
+      {
+        "price": 5138.09,
+        "volume": 9
+      },
+      {
+        "price": 5137.59,
+        "volume": 25
+      },
+      {
+        "price": 5137.29,
+        "volume": 13
+      },
+      {
+        "price": 5137.19,
+        "volume": 7
+      }
+    ],
+    "buy": [
+      {
+        "price": 5136.99,
+        "volume": 16
+      },
+      {
+        "price": 5136.89,
+        "volume": 8
+      },
+      {
+        "price": 5136.59,
+        "volume": 10
+      },
+      {
+        "price": 5136.09,
+        "volume": 5
+      },
+      {
+        "price": 5135.59,
+        "volume": 9
+      }
+    ]
+  }
+}
