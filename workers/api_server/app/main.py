@@ -11,12 +11,14 @@ from .schemas import (
     LoginRequest,
     LogoutRequest,
     RoomActionRequest,
+    RoomStatusRequest,
+    RoomStatusResponse,
 )
 from .service import ApiServerService
 
 config = get_config()
 auth_client, room_client, trading_client = build_clients(config)
-service = ApiServerService(auth_client, room_client, trading_client)
+service = ApiServerService(config, auth_client, room_client, trading_client)
 queue_manager = ApiQueueManager(service)
 
 
@@ -89,10 +91,22 @@ async def room_action(action_name: str, payload: RoomActionRequest):
         raise HTTPException(status_code=404, detail="Unsupported room action")
 
     body = payload.model_dump(exclude_none=True)
+    body.setdefault("base_domain", "https://demo.hivagold.com")
     body.update(body.pop("payload", {}))
     body["endpoint"] = endpoint
     try:
         result = await queue_manager.enqueue("room_action", body)
         return ApiActionResponse(success=result.get("success", False), data=result)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/room/status", response_model=RoomStatusResponse)
+async def room_status(payload: RoomStatusRequest):
+    try:
+        result = await queue_manager.enqueue("check_room_status", payload.model_dump())
+        return RoomStatusResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

@@ -11,12 +11,14 @@ class HealthResponse(BaseModel):
 class RoomBaseRequest(BaseModel):
     mobile: str
     base_domain: Optional[str] = None
+    room_prefix: Optional[str] = None
 
 
 class ProcessRoomRequest(BaseModel):
     action: str
     mobile: str
     base_domain: Optional[str] = None
+    room_prefix: Optional[str] = None
     order_type: Optional[str] = Field(
         default=None, validation_alias=AliasChoices("order_type", "ordertype")
     )

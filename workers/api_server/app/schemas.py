@@ -30,4 +30,19 @@ class ApiActionResponse(BaseModel):
 class RoomActionRequest(BaseModel):
     mobile: str
     base_domain: Optional[str] = None
+    market: Optional[str] = "xag"
     payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class RoomStatusRequest(BaseModel):
+    base_domain: str
+    market: str = "xag"
+
+
+class RoomStatusResponse(BaseModel):
+    success: bool
+    market: str
+    is_open: bool
+    active: Optional[bool] = None
+    reason: Optional[str] = None
+    notification: Optional[str] = None
