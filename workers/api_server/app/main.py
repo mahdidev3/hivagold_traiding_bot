@@ -34,13 +34,17 @@ app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION, lifespan=lifesp
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    return HealthResponse(status="healthy", app_name=config.APP_NAME, version=config.APP_VERSION)
+    return HealthResponse(
+        status="healthy", app_name=config.APP_NAME, version=config.APP_VERSION
+    )
 
 
 @app.post("/login", response_model=ApiActionResponse)
 async def login(payload: LoginRequest):
     try:
-        result = await queue_manager.enqueue("login", payload.model_dump(exclude_none=True))
+        result = await queue_manager.enqueue(
+            "login", payload.model_dump(exclude_none=True)
+        )
         return ApiActionResponse(success=result.get("success", False), data=result)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -49,7 +53,9 @@ async def login(payload: LoginRequest):
 @app.post("/logout", response_model=ApiActionResponse)
 async def logout(payload: LogoutRequest):
     try:
-        result = await queue_manager.enqueue("logout", payload.model_dump(exclude_none=True))
+        result = await queue_manager.enqueue(
+            "logout", payload.model_dump(exclude_none=True)
+        )
         return ApiActionResponse(success=result.get("success", False), data=result)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
