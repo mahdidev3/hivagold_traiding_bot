@@ -270,6 +270,7 @@ class TradingWorkerService:
                     session_stop_event,
                     on_message=lambda msg: self._on_live_bars_message(msg, state),
                     on_open=self._on_open_live,
+                    on_disconnect=lambda reason: self._on_ws_disconnect(user, "live-bars", reason),
                 )
             ),
             asyncio.create_task(
@@ -280,6 +281,7 @@ class TradingWorkerService:
                     session_stop_event,
                     on_message=lambda msg: self._on_price_message(msg, state),
                     on_open=self._on_open_price,
+                    on_disconnect=lambda reason: self._on_ws_disconnect(user, "price", reason),
                 )
             ),
             asyncio.create_task(
@@ -289,6 +291,7 @@ class TradingWorkerService:
                     ws_headers,
                     session_stop_event,
                     on_message=lambda msg: self._on_wall_message(msg, state),
+                    on_disconnect=lambda reason: self._on_ws_disconnect(user, "wall", reason),
                 )
             ),
         ]
@@ -381,6 +384,16 @@ class TradingWorkerService:
             state.latest_signal = signal
             await self._publish_signal(signal)
             await asyncio.sleep(self.config.SIGNAL_INTERVAL_SECONDS)
+
+
+    async def _on_ws_disconnect(self, user: UserContext, stream_name: str, reason: str) -> None:
+        await self._publish_signal(
+            self._error_signal(
+                user,
+                f"{stream_name} websocket disconnected: {reason}",
+                status="ws_disconnected",
+            )
+        )
 
     async def _on_open_live(self, ws) -> Optional[asyncio.Task]:
         await ws.send(json.dumps(LIVE_SUB_MESSAGE, ensure_ascii=False))

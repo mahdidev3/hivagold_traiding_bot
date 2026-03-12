@@ -14,7 +14,7 @@ from .schemas import (
     LogoutResponse,
 )
 from .service import LoginWorkerService
-from config import get_config
+from config import build_api_url, get_config
 
 config = get_config()
 logger: Logger = setup_logger(config)
@@ -95,17 +95,17 @@ async def health():
 async def login(payload: LoginRequest):
     try:
         logger.debug("Received login request for mobile=%s", payload.mobile)
+        base_domain = payload.base_domain or config.DEFAULT_BASE_DOMAIN
         (success, cookies) = await queue_manager.enqueue(
             payload.mobile,
             payload.password,
             payload.max_retries,
-            payload.base_domain or config.DEFAULT_BASE_DOMAIN,
-            payload.login_url or config.DEFAULT_LOGIN_URL,
-            payload.get_captcha_info_url or config.DEFAULT_GET_CAPTCHA_INFO_URL,
-            payload.get_captcha_image_base_url
-            or config.DEFAULT_GET_CAPTCHA_IMAGE_BASE_URL,
-            payload.verify_captcha_url or config.DEFAULT_VERIFY_CAPTCHA_URL,
-            payload.cookies_validation_url or config.DEFAULT_COOKIES_VALIDATION_URL,
+            base_domain,
+            build_api_url(base_domain, config.LOGIN_PATH),
+            build_api_url(base_domain, config.CAPTCHA_INFO_PATH),
+            build_api_url(base_domain, config.CAPTCHA_IMAGE_BASE_PATH),
+            build_api_url(base_domain, config.VERIFY_CAPTCHA_PATH),
+            build_api_url(base_domain, config.COOKIES_VALIDATION_PATH),
         )
         logger.info("Login request finished success=%s for mobile=%s", success, payload.mobile)
         return LoginResponse(success=success)

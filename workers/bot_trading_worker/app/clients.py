@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 import redis
 import requests
 import websockets
+from websockets.exceptions import ConnectionClosed
 
 from config import Config
 
@@ -279,6 +280,7 @@ class MarketDataClient:
         stop_event: asyncio.Event,
         on_message: Callable[[str], Awaitable[None]],
         on_open: Optional[Callable[[Any], Awaitable[Optional[asyncio.Task]]]] = None,
+        on_disconnect: Optional[Callable[[str], Awaitable[None]]] = None,
     ) -> None:
         parsed_url = urlparse(url)
         ssl_context = (
@@ -303,9 +305,16 @@ class MarketDataClient:
                         background_task = await on_open(ws)
                     async for message in ws:
                         await on_message(message)
+            except ConnectionClosed as exc:
+                if not stop_event.is_set():
+                    self.logger.warning("ws %s closed code=%s reason=%s", name, getattr(exc, "code", None), getattr(exc, "reason", ""))
+                    if on_disconnect is not None:
+                        await on_disconnect(f"closed: {getattr(exc, 'code', None)}")
             except Exception as exc:
                 if not stop_event.is_set():
                     self.logger.warning("ws %s error: %s", name, exc)
+                    if on_disconnect is not None:
+                        await on_disconnect(str(exc))
             finally:
                 if background_task:
                     background_task.cancel()

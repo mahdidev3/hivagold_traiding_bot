@@ -15,11 +15,6 @@ class LoginRequest(BaseModel):
     password: str
     max_retries: int = 3
     base_domain: Optional[str] = None
-    login_url: Optional[str] = None
-    get_captcha_info_url: Optional[str] = None
-    get_captcha_image_base_url: Optional[str] = None
-    verify_captcha_url: Optional[str] = None
-    cookies_validation_url: Optional[str] = None
 
 
 class LoginResponse(BaseModel):
