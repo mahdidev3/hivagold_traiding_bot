@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 import requests
@@ -6,11 +7,12 @@ from config import Config
 
 
 class ApiServerService:
-    def __init__(self, config: Config, auth_client, room_client, trading_client):
+    def __init__(self, config: Config, auth_client, room_client, trading_client, logger: logging.Logger | None = None):
         self.config = config
         self.auth_client = auth_client
         self.room_client = room_client
         self.trading_client = trading_client
+        self.logger = logger or logging.getLogger(__name__)
 
     def _normalize_market(self, market: str | None) -> str:
         selected = (market or self.config.DEFAULT_MARKET).strip().lower()
@@ -28,6 +30,7 @@ class ApiServerService:
         return self.room_client.post("/room/status", payload)
 
     def execute(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self.logger.debug("Executing action=%s", action)
         if action == "login":
             return self.auth_client.post("/login", payload)
         if action == "logout":
@@ -43,18 +46,22 @@ class ApiServerService:
             try:
                 room_status = self.room_status(payload["mobile"], payload.get("base_domain"), payload.get("market"))
                 if not room_status["is_open"]:
+                    self.logger.info("Blocked room action because room is closed")
                     return {
                         "success": False,
                         "error": "Room is closed",
                         "room_status": room_status,
                     }
                 payload["room_prefix"] = f"/{room_status['market']}"
+                self.logger.debug("Forwarding room_action endpoint=%s room_prefix=%s", endpoint, payload["room_prefix"])
                 return self.room_client.post(endpoint, payload)
             except requests.RequestException as exc:
+                self.logger.exception("Room API request failed")
                 return {
                     "success": False,
                     "error": f"Room API request failed: {exc}",
                 }
             except ValueError as exc:
+                self.logger.warning("Invalid room action payload: %s", exc)
                 return {"success": False, "error": str(exc)}
         return {"success": False, "error": f"Unsupported action: {action}"}

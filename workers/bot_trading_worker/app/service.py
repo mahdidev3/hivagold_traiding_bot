@@ -42,11 +42,12 @@ class TradingWorkerService:
         config: Config,
         redis_client: HivagoldRedisClient,
         market_client: MarketDataClient,
+        logger: logging.Logger | None = None,
     ):
         self.config = config
         self.redis_client = redis_client
         self.market_client = market_client
-        self.logger = logging.getLogger(__name__)
+        self.logger = logger or logging.getLogger(__name__)
 
         self._running = False
         self._stop_event = asyncio.Event()
