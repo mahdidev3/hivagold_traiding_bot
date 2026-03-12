@@ -81,6 +81,17 @@ async def signals_latest():
         raise HTTPException(status_code=500, detail=str(exc))
 
 
+@app.post("/room/status", response_model=RoomStatusResponse)
+async def room_status(payload: RoomStatusRequest):
+    try:
+        result = await queue_manager.enqueue("check_room_status", payload.model_dump())
+        return RoomStatusResponse(**result)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+
 @app.post("/room/{action_name}", response_model=ApiActionResponse)
 async def room_action(action_name: str, payload: RoomActionRequest):
     endpoints = {
@@ -103,16 +114,5 @@ async def room_action(action_name: str, payload: RoomActionRequest):
     try:
         result = await queue_manager.enqueue("room_action", body)
         return ApiActionResponse(success=result.get("success", False), data=result)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
-
-
-@app.post("/room/status", response_model=RoomStatusResponse)
-async def room_status(payload: RoomStatusRequest):
-    try:
-        result = await queue_manager.enqueue("check_room_status", payload.model_dump())
-        return RoomStatusResponse(**result)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
