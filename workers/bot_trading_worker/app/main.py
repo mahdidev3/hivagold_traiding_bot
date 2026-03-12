@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 import asyncio
 import json
+from logging import Logger
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 
@@ -19,11 +20,11 @@ from .service import TradingWorkerService
 
 config = get_config()
 
-logger = setup_logger(config)
+logger: Logger = setup_logger(config)
 
 redis_client, market_client = build_clients(config)
-trading_service = TradingWorkerService(config, redis_client, market_client)
-queue_manager = TradingQueueManager(trading_service)
+trading_service = TradingWorkerService(config, redis_client, market_client, logger)
+queue_manager = TradingQueueManager(trading_service, logger)
 
 
 @asynccontextmanager
@@ -59,6 +60,7 @@ async def health():
 @app.post("/trading/process", response_model=ProcessTradingResponse)
 async def process_request(payload: ProcessTradingRequest):
     try:
+        logger.debug("Received process trading request")
         result = await queue_manager.enqueue(payload.model_dump())
         return _http_from_result(result)
     except HTTPException:
