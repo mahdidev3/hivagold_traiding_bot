@@ -69,16 +69,16 @@ async def logout(payload: LogoutRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@app.post("/portfolio/create", response_model=ApiActionResponse)
-async def create_portfolio(payload: RoomActionRequest):
-    body = payload.model_dump(exclude_none=True)
-    body.update(body.pop("payload", {}))
-    try:
-        logger.debug("Received create_portfolio request")
-        result = await queue_manager.enqueue("create_portfolio", body)
-        return ApiActionResponse(success=result.get("success", False), data=result)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+# @app.post("/portfolio/create", response_model=ApiActionResponse)
+# async def create_portfolio(payload: RoomActionRequest):
+#     body = payload.model_dump(exclude_none=True)
+#     body.update(body.pop("payload", {}))
+#     try:
+#         logger.debug("Received create_portfolio request")
+#         result = await queue_manager.enqueue("create_portfolio", body)
+#         return ApiActionResponse(success=result.get("success", False), data=result)
+#     except Exception as exc:
+#         raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/signals/latest", response_model=ApiActionResponse)

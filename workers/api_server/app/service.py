@@ -35,7 +35,9 @@ class ApiServerService:
             )
         return selected
 
-    def room_status(self, mobile: str, base_domain: str | None, market: str | None) -> dict[str, Any]:
+    def room_status(
+        self, mobile: str, base_domain: str | None, market: str | None
+    ) -> dict[str, Any]:
         selected_market = self._normalize_market(market)
         payload = {"mobile": mobile, "market": selected_market}
         if base_domain:
@@ -53,11 +55,15 @@ class ApiServerService:
         if action == "get_signals":
             return self.trading_client.get("/signals/latest")
         if action == "check_room_status":
-            return self.room_status(payload["mobile"], payload.get("base_domain"), payload.get("market"))
+            return self.room_status(
+                payload["mobile"], payload.get("base_domain"), payload.get("market")
+            )
         if action == "room_action":
             endpoint = payload.pop("endpoint")
             try:
-                room_status = self.room_status(payload["mobile"], payload.get("base_domain"), payload.get("market"))
+                room_status = self.room_status(
+                    payload["mobile"], payload.get("base_domain"), payload.get("market")
+                )
                 if not room_status["is_open"]:
                     self.logger.info("Blocked room action because room is closed")
                     return {
@@ -66,7 +72,11 @@ class ApiServerService:
                         "room_status": room_status,
                     }
                 payload["room_prefix"] = f"/{room_status['market']}"
-                self.logger.debug("Forwarding room_action endpoint=%s room_prefix=%s", endpoint, payload["room_prefix"])
+                self.logger.debug(
+                    "Forwarding room_action endpoint=%s room_prefix=%s",
+                    endpoint,
+                    payload["room_prefix"],
+                )
                 return self.room_client.post(endpoint, payload)
             except requests.RequestException as exc:
                 self.logger.exception("Room API request failed")
