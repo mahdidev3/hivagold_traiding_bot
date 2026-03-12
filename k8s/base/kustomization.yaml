@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: hivagold
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - secret.yaml
+  - redis.yaml
+  - bot-captcha-worker.yaml
+  - bot-auth-worker.yaml
+  - bot-room-worker.yaml
+  - bot-trading-worker.yaml
+  - api-server.yaml
+  - ingress.yaml
+  - externalname-services.yaml

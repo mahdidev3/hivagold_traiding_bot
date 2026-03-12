@@ -39,6 +39,8 @@ tests/
 
 - Python **3.11+**
 - Docker + Docker Compose
+- kubectl (for Kubernetes deployments)
+- (Minikube only) minikube + ingress addon
 - (Optional) PowerShell for `manage.ps1` helper scripts
 
 ---
@@ -236,6 +238,94 @@ curl -X POST http://localhost:8000/portfolio/create \
 curl -X POST http://localhost:8000/room/portfolio-create \
   -H "Content-Type: application/json" \
   -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag"}'
+```
+
+---
+
+## 6) Kubernetes deployment (Minikube and other clusters)
+
+All Kubernetes manifests are in `k8s/base`.
+
+### A) What is included
+
+- Namespace (`hivagold`)
+- Shared ConfigMap (`hivagold-config`)
+- Shared Secret (`hivagold-secrets`)
+- Redis (PVC + Deployment + Service)
+- Deployments + Services for all app workers
+- Ingress (`api.hivagold.local` → `api-server`)
+- ExternalName service (`hivagold-main-api`) for DNS-style CNAME mapping
+
+### B) Build images (Minikube local Docker daemon)
+
+```bash
+minikube start
+eval $(minikube docker-env)
+
+docker build -t hivagold-api-server:latest workers/api_server
+docker build -t bot-auth-worker:latest workers/bot_auth_worker
+docker build -t bot-captcha-worker:latest workers/bot_captcha_worker
+docker build -t bot-room-worker:latest workers/bot_room_worker
+docker build -t bot-trading-worker:latest workers/bot_trading_worker
+```
+
+### C) Apply manifests
+
+```bash
+kubectl apply -k k8s/base
+kubectl get all -n hivagold
+```
+
+### D) Minikube ingress setup
+
+```bash
+minikube addons enable ingress
+kubectl get ingress -n hivagold
+minikube ip
+```
+
+Add this to your `/etc/hosts` (or Windows hosts file), replacing `<MINIKUBE_IP>`:
+
+```text
+<MINIKUBE_IP> api.hivagold.local
+```
+
+Then test:
+
+```bash
+curl http://api.hivagold.local/health
+```
+
+### E) Quick access without ingress (port-forward)
+
+```bash
+kubectl -n hivagold port-forward svc/api-server 8000:8000
+curl http://127.0.0.1:8000/health
+```
+
+### F) Deploying to other clusters (EKS/GKE/AKS/on-prem)
+
+1. Push images to your registry (for example `registry.example.com/hivagold/...`).
+2. Update image references in the Deployment manifests under `k8s/base/*.yaml`.
+3. Replace `REDIS_PASSWORD` in `k8s/base/secret.yaml`.
+4. (Optional but recommended) attach a StorageClass to `redis-data` PVC for persistent Redis storage.
+5. Configure your ingress controller/class and hostnames/TLS certificates.
+6. Apply manifests:
+
+```bash
+kubectl apply -k k8s/base
+kubectl rollout status deployment/api-server -n hivagold
+kubectl get pods -n hivagold
+```
+
+### G) Useful Kubernetes operations
+
+```bash
+kubectl get pods -n hivagold
+kubectl logs -n hivagold deployment/api-server
+kubectl logs -n hivagold deployment/bot-auth-worker
+kubectl describe pod -n hivagold <pod-name>
+kubectl delete -k k8s/base
 ```
 
 More room examples:
