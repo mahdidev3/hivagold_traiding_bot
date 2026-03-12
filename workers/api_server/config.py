@@ -9,11 +9,14 @@ class Config:
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
 
     API_SERVER_HOST: str = os.getenv("API_SERVER_HOST", "0.0.0.0")
-    API_SERVER_PORT: int = int(os.getenv("API_SERVER_PORT", "8007"))
+    API_SERVER_PORT: int = int(os.getenv("API_SERVER_PORT", "8000"))
 
     AUTH_WORKER_URL: str = os.getenv("AUTH_WORKER_URL", "http://localhost:8002")
     ROOM_WORKER_URL: str = os.getenv("ROOM_WORKER_URL", "http://localhost:8005")
     TRADING_WORKER_URL: str = os.getenv("TRADING_WORKER_URL", "http://localhost:8006")
+
+    DEFAULT_MARKET: str = os.getenv("DEFAULT_MARKET", "xag")
+    MARKET_CHOICES: tuple[str, ...] = ("xag", "mazaneh", "ounce")
 
     HTTP_TIMEOUT_SECONDS: int = int(os.getenv("HTTP_TIMEOUT_SECONDS", "45"))
 

@@ -40,6 +40,12 @@ class BaseRoomService:
         self.redis_client = redis_client
         self.logger = logger
 
+    def _resolve_room_prefix(self, room_prefix: Optional[str]) -> str:
+        normalized = (room_prefix or self.config.ROOM_PREFIX or "").strip()
+        if not normalized:
+            return ""
+        return f"/{normalized.strip('/')}"
+
     def _load_session(
         self, mobile: Optional[str], base_domain: Optional[str]
     ) -> tuple[Optional[str], Optional[dict], Optional[dict], Optional[str]]:
@@ -92,7 +98,7 @@ class GetPortfoliosService(BaseRoomService):
                 return {"success": False, "portfolios": None, "error": error}
 
             get_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/portfolio/active/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/portfolio/active/"
             )
             portfolios = self.portfolio_client.get_portfolios(
                 get_url=get_url,
@@ -138,7 +144,7 @@ class CreateActivePortfolioService(BaseRoomService):
                 return {"success": False, "portfolio": None, "error": error}
 
             create_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/portfolio/create/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/portfolio/create/"
             )
             portfolio = self.portfolio_client.create_portfolio(
                 create_url=create_url,
@@ -176,7 +182,7 @@ class GetOrdersService(BaseRoomService):
                 return {"success": False, "orders": None, "error": error}
 
             get_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/order/active/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/order/active/"
             )
             orders = self.orders_client.get_active_orders(
                 get_url=get_url,
@@ -236,7 +242,7 @@ class CreateOrderService(BaseRoomService):
                 return {"success": False, "order": None, "error": error}
 
             create_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/order/create/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/order/create/"
             )
             self.logger.debug("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
             self.logger.debug(cookies)
@@ -290,7 +296,7 @@ class CloseOrderService(BaseRoomService):
                 return {"success": False, "order": None, "error": error}
 
             close_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/order/close/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/order/close/"
             )
             order = self.orders_client.close_order(
                 close_url=close_url,
@@ -327,7 +333,7 @@ class GetTransactionsService(BaseRoomService):
                 return {"success": False, "transactions": None, "error": error}
 
             get_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/transaction/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/transaction/"
             )
             transactions = self.portfolio_client.get_transactions(
                 get_url=get_url,
@@ -371,7 +377,7 @@ class CloseTransactionService(BaseRoomService):
                 return {"success": False, "transaction": None, "error": error}
 
             close_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/transaction/close/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/transaction/close/"
             )
             transaction = self.portfolio_client.close_transaction(
                 close_url=close_url,
@@ -463,7 +469,7 @@ class ClosePortfolioService(BaseRoomService):
 
             # Ensure all active orders are closed before closing portfolio.
             active_orders_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/order/active/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/order/active/"
             )
             active_orders = self.orders_client.get_active_orders(
                 get_url=active_orders_url,
@@ -475,7 +481,7 @@ class ClosePortfolioService(BaseRoomService):
 
             closed_orders: list[str] = []
             close_order_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/order/close/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/order/close/"
             )
             for order_id in self._extract_active_order_ids(active_orders):
                 self.orders_client.close_order(
@@ -489,7 +495,7 @@ class ClosePortfolioService(BaseRoomService):
                 closed_orders.append(order_id)
 
             transactions_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/transaction/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/transaction/"
             )
             transactions = self.portfolio_client.get_transactions(
                 get_url=transactions_url,
@@ -501,7 +507,7 @@ class ClosePortfolioService(BaseRoomService):
 
             closed_transactions: list[str] = []
             close_transaction_url = _build_room_url(
-                base_domain, self.config.ROOM_PREFIX, "/api/transaction/close/"
+                base_domain, self._resolve_room_prefix(args.get("room_prefix")), "/api/transaction/close/"
             )
             for transaction_id in self._extract_open_transaction_ids(transactions):
                 self.portfolio_client.close_transaction(
@@ -516,7 +522,7 @@ class ClosePortfolioService(BaseRoomService):
 
             close_portfolio_url = _build_room_url(
                 base_domain,
-                self.config.ROOM_PREFIX,
+                self._resolve_room_prefix(args.get("room_prefix")),
                 f"/api/portfolio/close/{portfolio_id}/",
             )
             portfolio = self.portfolio_client.close_portfolio(
