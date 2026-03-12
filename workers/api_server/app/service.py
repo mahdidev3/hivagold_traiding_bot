@@ -1,13 +1,26 @@
 import logging
-from typing import Any
+from typing import Any, Protocol
 
 import requests
 
 from config import Config
 
 
+class WorkerClientProtocol(Protocol):
+    def post(self, path: str, body: dict[str, Any]) -> dict[str, Any]: ...
+
+    def get(self, path: str) -> dict[str, Any]: ...
+
+
 class ApiServerService:
-    def __init__(self, config: Config, auth_client, room_client, trading_client, logger: logging.Logger | None = None):
+    def __init__(
+        self,
+        config: Config,
+        auth_client: WorkerClientProtocol,
+        room_client: WorkerClientProtocol,
+        trading_client: WorkerClientProtocol,
+        logger: logging.Logger | None = None,
+    ):
         self.config = config
         self.auth_client = auth_client
         self.room_client = room_client
@@ -36,7 +49,7 @@ class ApiServerService:
         if action == "logout":
             return self.auth_client.post("/logout", payload)
         if action == "create_portfolio":
-            return self.room_client.post("/room/portfolios/active", payload)
+            return self.room_client.post("/room/portfolio/create", payload)
         if action == "get_signals":
             return self.trading_client.get("/signals/latest")
         if action == "check_room_status":

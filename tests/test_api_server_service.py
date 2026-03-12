@@ -6,13 +6,13 @@ class DummyClient:
         self.calls = []
         self.status_payload = {"success": True, "market": "xag", "is_open": True, "active": True, "reason": "in_shift"}
 
-    def post(self, path, body):
+    def post(self, path: str, body: dict):
         self.calls.append(("post", path, body))
         if path == "/room/status":
             return self.status_payload
         return {"success": True, "path": path, "body": body}
 
-    def get(self, path):
+    def get(self, path: str):
         self.calls.append(("get", path, None))
         return {"success": True, "path": path}
 
@@ -37,7 +37,7 @@ def test_api_server_service_routes_to_workers():
     assert signal_result["path"] == "/signals/latest"
 
     portfolio_result = service.execute("create_portfolio", {"mobile": "0912"})
-    assert portfolio_result["path"] == "/room/portfolios/active"
+    assert portfolio_result["path"] == "/room/portfolio/create"
     assert room.calls[-1][0] == "post"
 
 

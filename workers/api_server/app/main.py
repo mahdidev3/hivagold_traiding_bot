@@ -107,6 +107,7 @@ async def room_status(payload: RoomStatusRequest):
 async def room_action(action_name: str, payload: RoomActionRequest):
     endpoints = {
         "portfolios": "/room/portfolios",
+        "portfolio-create": "/room/portfolio/create",
         "orders": "/room/orders",
         "order-create": "/room/order/create",
         "order-close": "/room/order/close",
