@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: bot-room-worker
-          image: bot-room-worker:latest
+          image: bot-room-worker:1.0.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8005

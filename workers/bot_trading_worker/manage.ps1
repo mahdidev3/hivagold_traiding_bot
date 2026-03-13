@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true)]
-    [ValidateSet("build", "up", "down", "restart", "logs", "all", "volumes", "volumes-rm", "volume-rm")]
+    [ValidateSet("build", "up", "down", "restart", "logs", "all", "volumes", "volumes-rm", "volume-rm", "tag", "build-tag")]
     [string]$Action,
     [string]$VolumeName
 )
@@ -65,6 +65,52 @@ function RemoveSingleVolume {
     Write-Host "[OK] Volume '$VolumeName' removed." -ForegroundColor Green
 }
 
+
+function GetAppVersion {
+    $envPath = Join-Path $PSScriptRoot ".env"
+    if (-not (Test-Path $envPath)) {
+        throw "Missing .env file at $envPath"
+    }
+
+    $line = Get-Content $envPath | Where-Object { $_ -match '^APP_VERSION=' } | Select-Object -First 1
+    if (-not $line) {
+        throw "APP_VERSION is not defined in $envPath"
+    }
+
+    return ($line -split '=', 2)[1].Trim()
+}
+
+function GetImageName {
+    $composePath = Join-Path $PSScriptRoot "docker-compose.yaml"
+    if (-not (Test-Path $composePath)) {
+        throw "Missing docker-compose.yaml at $composePath"
+    }
+
+    $line = Get-Content $composePath | Where-Object { $_ -match '^\s*image:\s*' } | Select-Object -First 1
+    if (-not $line) {
+        throw "No 'image:' entry found in $composePath. Add explicit image name before tagging."
+    }
+
+    return ($line -replace '^\s*image:\s*', '').Trim()
+}
+
+function Tag {
+    $image = GetImageName
+    $version = GetAppVersion
+    $repo = ($image -split ':', 2)[0]
+    $taggedImage = "${repo}:$version"
+
+    Write-Host "[*] Tagging image '$image' as '$taggedImage'..." -ForegroundColor Cyan
+    docker image inspect $image | Out-Null
+    docker tag $image $taggedImage
+    Write-Host "[OK] Tagged image as $taggedImage" -ForegroundColor Green
+}
+
+function BuildTag {
+    Build
+    Tag
+}
+
 try {
     switch ($Action) {
         "build" { Build }
@@ -76,6 +122,8 @@ try {
         "volumes" { ShowVolumes }
         "volumes-rm" { RemoveComposeVolumes }
         "volume-rm" { RemoveSingleVolume }
+        "tag" { Tag }
+        "build-tag" { BuildTag }
     }
 }
 catch {

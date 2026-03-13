@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: bot-captcha-worker
-          image: bot-captcha-worker:latest
+          image: bot-captcha-worker:1.0.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8001

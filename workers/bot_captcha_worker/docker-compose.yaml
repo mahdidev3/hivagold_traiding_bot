@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: bot-captcha-worker:latest
     container_name: captcha-worker
     env_file:
       - .env

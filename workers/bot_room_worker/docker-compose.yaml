@@ -3,6 +3,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
+    image: bot-room-worker:latest
     container_name: room-worker
     env_file:
       - .env

@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: bot-trading-worker
-          image: bot-trading-worker:latest
+          image: bot-trading-worker:1.0.0.0
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8006
