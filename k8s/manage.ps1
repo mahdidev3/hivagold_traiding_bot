@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet("apply", "update", "delete", "get-all", "check-all", "status", "sync-images", "help")]
+    [ValidateSet("apply", "update", "delete", "get-all", "check-all", "status", "sync-images", "load-images", "prepare", "help")]
     [string]$Action,
 
     [Parameter(Position = 1)]
@@ -24,6 +24,18 @@ function EnsureKubectl {
     if (-not (Get-Command kubectl -ErrorAction SilentlyContinue)) {
         throw "kubectl is required but was not found in PATH."
     }
+}
+
+function EnsureDocker {
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        throw "docker is required but was not found in PATH."
+    }
+}
+
+function IsMinikubeContext {
+    EnsureKubectl
+    $ctx = kubectl config current-context
+    return $ctx -like "minikube*"
 }
 
 function ResolveTarget {
@@ -73,11 +85,51 @@ function SyncImageTags {
     }
 }
 
+function LoadImagesToMinikube {
+    param([string[]]$Names)
+
+    EnsureDocker
+
+    $isMinikube = IsMinikubeContext
+    $hasMinikubeCommand = [bool](Get-Command minikube -ErrorAction SilentlyContinue)
+
+    if ($isMinikube -and -not $hasMinikubeCommand) {
+        throw "Current kubectl context is Minikube but 'minikube' command was not found."
+    }
+
+    foreach ($name in $Names) {
+        $meta = $Workers[$name]
+        $version = GetAppVersion -EnvRelativePath $meta.Env
+        $taggedImage = "$($meta.Image):$version"
+
+        docker image inspect $taggedImage *> $null
+        if ($LASTEXITCODE -ne 0) {
+            throw "Local image '$taggedImage' not found. Build it first in Docker Desktop before Kubernetes actions."
+        }
+
+        if ($isMinikube) {
+            Write-Host "[*] Loading $taggedImage into Minikube from local Docker daemon..." -ForegroundColor Cyan
+            minikube image load $taggedImage --overwrite=true
+            Write-Host "[OK] Loaded into Minikube: $taggedImage" -ForegroundColor Green
+        }
+        else {
+            Write-Host "[WARN] Context is not Minikube. Verified local Docker image exists: $taggedImage" -ForegroundColor Yellow
+        }
+    }
+}
+
+function PrepareImages {
+    param([string[]]$Names)
+
+    SyncImageTags -Names $Names
+    LoadImagesToMinikube -Names $Names
+}
+
 function ApplyTarget {
     param([string[]]$Names)
 
     EnsureKubectl
-    SyncImageTags -Names $Names
+    PrepareImages -Names $Names
 
     if ($Names.Count -eq 5) {
         Write-Host "[*] Applying full base manifests..." -ForegroundColor Cyan
@@ -134,8 +186,10 @@ function ShowHelp {
     Write-Host "" 
     Write-Host "Actions:" -ForegroundColor Yellow
     Write-Host "  sync-images        Update image tags in YAMLs from each worker .env APP_VERSION"
+    Write-Host "  load-images        Verify Docker Desktop images exist and load them into Minikube (offline/local)"
+    Write-Host "  prepare            sync-images + load-images"
     Write-Host "  apply all          Sync and apply all manifests (kubectl apply -k)"
-    Write-Host "  update <name>      Sync and apply only one worker deployment YAML"
+    Write-Host "  update <name>      Prepare images and apply only one worker deployment YAML"
     Write-Host "  delete all         Delete all manifests in base"
     Write-Host "  delete <name>      Delete one worker deployment YAML"
     Write-Host "  get-all            kubectl get all -n hivagold"
@@ -149,6 +203,8 @@ function ShowHelp {
 try {
     switch ($Action) {
         "sync-images" { SyncImageTags -Names (ResolveTarget -Name $Target) }
+        "load-images" { LoadImagesToMinikube -Names (ResolveTarget -Name $Target) }
+        "prepare" { PrepareImages -Names (ResolveTarget -Name $Target) }
         "apply" { ApplyTarget -Names (ResolveTarget -Name $Target) }
         "update" { ApplyTarget -Names (ResolveTarget -Name $Target) }
         "delete" { DeleteTarget -Names (ResolveTarget -Name $Target) }

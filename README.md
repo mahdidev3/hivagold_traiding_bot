@@ -256,27 +256,86 @@ All Kubernetes manifests are in `k8s/base`.
 - Ingress (`api.hivagold.local` → `api-server`)
 - ExternalName service (`hivagold-main-api`) for DNS-style CNAME mapping
 
-### B) Build images (Minikube local Docker daemon)
+### B) Local image requirement before Kubernetes operations
+
+Before running `apply`, `update`, or any rollout operation, required container images must exist locally in Docker Desktop.
+
+- `k8s/manage.ps1` reads each worker `.env` `APP_VERSION`
+- It updates manifest image tags with `sync-images`
+- It verifies local images and (for Minikube context) loads them with `minikube image load`
+- This enables local/offline-style deployment flow without internet pulls (assuming images are already present locally)
+
+### C) Build images locally (Docker Desktop)
 
 ```bash
-minikube start
-eval $(minikube docker-env)
-
-docker build -t hivagold-api-server:latest workers/api_server
-docker build -t bot-auth-worker:latest workers/bot_auth_worker
-docker build -t bot-captcha-worker:latest workers/bot_captcha_worker
-docker build -t bot-room-worker:latest workers/bot_room_worker
-docker build -t bot-trading-worker:latest workers/bot_trading_worker
+docker build -t hivagold-api-server:<APP_VERSION> workers/api_server
+docker build -t bot-auth-worker:<APP_VERSION> workers/bot_auth_worker
+docker build -t bot-captcha-worker:<APP_VERSION> workers/bot_captcha_worker
+docker build -t bot-room-worker:<APP_VERSION> workers/bot_room_worker
+docker build -t bot-trading-worker:<APP_VERSION> workers/bot_trading_worker
 ```
 
-### C) Apply manifests
+> Replace `<APP_VERSION>` with the value in each worker `.env` file.
 
-```bash
-kubectl apply -k k8s/base
-kubectl get all -n hivagold
+### D) `k8s/manage.ps1` actions and examples (full)
+
+```powershell
+./k8s/manage.ps1 help
 ```
 
-### D) Minikube ingress setup
+Actions:
+
+- `sync-images` → update `k8s/base/*.yaml` image tags from `.env`
+- `load-images` → verify local Docker images and load into Minikube when context is Minikube
+- `prepare` → `sync-images` + `load-images`
+- `apply` → prepare and apply manifests
+- `update` → prepare and apply specific target
+- `delete` → delete all/single target manifests
+- `get-all` → show all resources in `hivagold` namespace
+- `check-all` → deployments/pods/services/ingress overview
+- `status` → rollout status for all/single deployment
+- `help` → usage
+
+Targets:
+
+- `all` (default)
+- `api-server`
+- `bot-auth-worker`
+- `bot-captcha-worker`
+- `bot-room-worker`
+- `bot-trading-worker`
+
+Examples:
+
+```powershell
+# Sync only
+./k8s/manage.ps1 sync-images all
+./k8s/manage.ps1 sync-images api-server
+
+# Local image check/load only
+./k8s/manage.ps1 load-images all
+./k8s/manage.ps1 load-images bot-auth-worker
+
+# Prepare (sync + load)
+./k8s/manage.ps1 prepare all
+./k8s/manage.ps1 prepare bot-room-worker
+
+# Apply/update
+./k8s/manage.ps1 apply all
+./k8s/manage.ps1 update bot-trading-worker
+
+# Inspect rollout
+./k8s/manage.ps1 get-all
+./k8s/manage.ps1 check-all
+./k8s/manage.ps1 status all
+./k8s/manage.ps1 status api-server
+
+# Delete
+./k8s/manage.ps1 delete bot-captcha-worker
+./k8s/manage.ps1 delete all
+```
+
+### E) Minikube ingress setup
 
 ```bash
 minikube addons enable ingress
@@ -296,14 +355,14 @@ Then test:
 curl http://api.hivagold.local/health
 ```
 
-### E) Quick access without ingress (port-forward)
+### F) Quick access without ingress (port-forward)
 
 ```bash
 kubectl -n hivagold port-forward svc/api-server 8000:8000
 curl http://127.0.0.1:8000/health
 ```
 
-### F) Deploying to other clusters (EKS/GKE/AKS/on-prem)
+### G) Deploying to other clusters (EKS/GKE/AKS/on-prem)
 
 1. Push images to your registry (for example `registry.example.com/hivagold/...`).
 2. Update image references in the Deployment manifests under `k8s/base/*.yaml`.
@@ -318,7 +377,7 @@ kubectl rollout status deployment/api-server -n hivagold
 kubectl get pods -n hivagold
 ```
 
-### G) Useful Kubernetes operations
+### H) Useful Kubernetes operations
 
 ```bash
 kubectl get pods -n hivagold
