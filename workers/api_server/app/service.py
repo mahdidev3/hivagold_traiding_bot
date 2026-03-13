@@ -19,12 +19,14 @@ class ApiServerService:
         auth_client: WorkerClientProtocol,
         room_client: WorkerClientProtocol,
         trading_client: WorkerClientProtocol,
+        portfolio_client: WorkerClientProtocol,
         logger: logging.Logger | None = None,
     ):
         self.config = config
         self.auth_client = auth_client
         self.room_client = room_client
         self.trading_client = trading_client
+        self.portfolio_client = portfolio_client
         self.logger = logger or logging.getLogger(__name__)
 
     def _normalize_market(self, market: str | None) -> str:
@@ -58,6 +60,16 @@ class ApiServerService:
             return self.room_status(
                 payload["mobile"], payload.get("base_domain"), payload.get("market")
             )
+        if action == "portfolio_rule_upsert":
+            return self.portfolio_client.post("/portfolio/rules", payload)
+        if action == "portfolio_order_create":
+            return self.portfolio_client.post("/portfolio/orders", payload)
+        if action == "portfolio_order_bot":
+            return self.portfolio_client.post("/portfolio/orders/bot", payload)
+        if action == "portfolio_price_tick":
+            return self.portfolio_client.post("/portfolio/price", payload)
+        if action == "portfolio_user_stats":
+            return self.portfolio_client.get(f"/portfolio/users/{payload['user_id']}/stats")
         if action == "room_action":
             endpoint = payload.pop("endpoint")
             try:

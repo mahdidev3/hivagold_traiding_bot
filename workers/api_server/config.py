@@ -14,6 +14,8 @@ class Config:
     AUTH_WORKER_URL: str = os.getenv("AUTH_WORKER_URL", "http://localhost:8002")
     ROOM_WORKER_URL: str = os.getenv("ROOM_WORKER_URL", "http://localhost:8005")
     TRADING_WORKER_URL: str = os.getenv("TRADING_WORKER_URL", "http://localhost:8006")
+    PORTFOLIO_WORKER_URL: str = os.getenv("PORTFOLIO_WORKER_URL", "http://localhost:8007")
+    PORTFOLIO_WORKER_API_KEY: str = os.getenv("PORTFOLIO_WORKER_API_KEY", "change-me")
 
     DEFAULT_MARKET: str = os.getenv("DEFAULT_MARKET", "xag")
     MARKET_CHOICES: tuple[str, ...] = ("xag", "mazaneh", "ounce")

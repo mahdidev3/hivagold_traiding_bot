@@ -7,6 +7,7 @@ This repository contains a Python/FastAPI-based microservice system for Hivagold
 - **Bot Captcha Worker**: captcha solving service.
 - **Bot Room Worker**: room/portfolio/order/transaction operations.
 - **Bot Trading Worker**: signal generation + websocket signal streaming.
+- **Bot Portfolio Worker**: portfolio rule engine + order execution with TP/SL tracking.
 - **Redis Worker**: shared state/cache.
 
 ---
@@ -20,6 +21,7 @@ workers/
   bot_captcha_worker/
   bot_room_worker/
   bot_trading_worker/
+  bot_portfolio_worker/
   redis_worker/
 tests/
 ```
@@ -33,6 +35,7 @@ tests/
 - **bot_room_worker**: portfolio/order/transaction management endpoints against Hivagold room APIs.
 - **bot_trading_worker**: market signal generation and websocket signal broadcasting.
 - **bot_captcha_worker**: dedicated captcha solving endpoint used by auth flow.
+- **bot_portfolio_worker**: executes buy/sell orders from rules and bot API, and stores user pnl/win-rate stats.
 - **redis_worker**: shared cache/session store used by all workers.
 
 ## Prerequisites
@@ -59,6 +62,7 @@ pip install -r workers/bot_auth_worker/requirements.txt
 pip install -r workers/bot_captcha_worker/requirements.txt
 pip install -r workers/bot_room_worker/requirements.txt
 pip install -r workers/bot_trading_worker/requirements.txt
+pip install -r workers/bot_portfolio_worker/requirements.txt
 pip install pytest
 ```
 
@@ -88,6 +92,9 @@ cd workers/bot_room_worker && python run.py
 cd workers/bot_trading_worker && python run.py
 
 # terminal 5
+cd workers/bot_portfolio_worker && python run.py
+
+# terminal 6
 cd workers/api_server && python run.py
 ```
 
@@ -150,6 +157,15 @@ docker compose down
 cd workers/api_server
 docker compose up -d
 docker compose logs -f api-server
+docker compose down
+```
+
+### Portfolio worker
+
+```bash
+cd workers/bot_portfolio_worker
+docker compose up -d
+docker compose logs -f portfolio-worker
 docker compose down
 ```
 

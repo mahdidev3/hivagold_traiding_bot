@@ -47,3 +47,33 @@ class RoomStatusResponse(BaseModel):
     active: Optional[bool] = None
     reason: Optional[str] = None
     notification: Optional[str] = None
+
+
+class PortfolioRuleRequest(BaseModel):
+    user_id: str
+    rule: dict[str, Any]
+
+
+class PortfolioOrderRequest(BaseModel):
+    user_id: str
+    side: str
+    entry_type: str = "market"
+    entry_price: Optional[float] = None
+    take_profit: float
+    stop_loss: float
+    volume: Optional[float] = None
+    symbol: str = "xag"
+
+
+class PortfolioBotOrderRequest(BaseModel):
+    user_id: str
+    side: str
+    take_profit: float
+    stop_loss: float
+    volume: Optional[float] = None
+    symbol: str = "xag"
+
+
+class PortfolioPriceTickRequest(BaseModel):
+    symbol: str = "xag"
+    price: float
