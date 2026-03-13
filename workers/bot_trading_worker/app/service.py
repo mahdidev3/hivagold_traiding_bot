@@ -271,7 +271,9 @@ class TradingWorkerService:
                     session_stop_event,
                     on_message=lambda msg: self._on_live_bars_message(msg, state),
                     on_open=self._on_open_live,
-                    on_disconnect=lambda reason: self._on_ws_disconnect(user, "live-bars", reason),
+                    on_disconnect=lambda reason: self._on_ws_disconnect(
+                        user, "live-bars", reason
+                    ),
                 )
             ),
             asyncio.create_task(
@@ -282,7 +284,9 @@ class TradingWorkerService:
                     session_stop_event,
                     on_message=lambda msg: self._on_price_message(msg, state),
                     on_open=self._on_open_price,
-                    on_disconnect=lambda reason: self._on_ws_disconnect(user, "price", reason),
+                    on_disconnect=lambda reason: self._on_ws_disconnect(
+                        user, "price", reason
+                    ),
                 )
             ),
             asyncio.create_task(
@@ -292,7 +296,9 @@ class TradingWorkerService:
                     ws_headers,
                     session_stop_event,
                     on_message=lambda msg: self._on_wall_message(msg, state),
-                    on_disconnect=lambda reason: self._on_ws_disconnect(user, "wall", reason),
+                    on_disconnect=lambda reason: self._on_ws_disconnect(
+                        user, "wall", reason
+                    ),
                 )
             ),
         ]
@@ -318,25 +324,25 @@ class TradingWorkerService:
         session: requests.Session,
         cookies: dict[str, str],
     ) -> dict[str, str]:
-        normalized_domain = normalize_base_url(domain)
-        room_prefix = (
-            f"/{self.config.ROOM_PREFIX.strip('/')}" if self.config.ROOM_PREFIX else ""
-        )
-        referer = f"{normalized_domain}{room_prefix}/"
-        csrf_token = (
-            session.headers.get("X-CSRFToken")
-            or session.headers.get("X-Csrftoken")
-            or cookies.get("csrftoken", "")
-        )
+        # normalized_domain = normalize_base_url(domain)
+        # room_prefix = (
+        #     f"/{self.config.ROOM_PREFIX.strip('/')}" if self.config.ROOM_PREFIX else ""
+        # )
+        # referer = f"{normalized_domain}{room_prefix}/"
+        # csrf_token = (
+        #     session.headers.get("X-CSRFToken")
+        #     or session.headers.get("X-Csrftoken")
+        #     or cookies.get("csrftoken", "")
+        # )
         return {
             "User-Agent": session.headers.get("User-Agent", "Mozilla/5.0"),
             "Cookie": cookie_header(cookies),
-            "Referer": referer,
-            "Origin": normalized_domain,
+            # "Referer": referer,
+            # "Origin": normalized_domain,
             "Pragma": "no-cache",
             "Cache-Control": "no-cache",
             "Accept-Language": session.headers.get("Accept-Language", "en-US,en;q=0.9"),
-            "X-CSRFToken": csrf_token,
+            # "X-CSRFToken": csrf_token,
         }
 
     async def _bars_loop(
@@ -386,8 +392,9 @@ class TradingWorkerService:
             await self._publish_signal(signal)
             await asyncio.sleep(self.config.SIGNAL_INTERVAL_SECONDS)
 
-
-    async def _on_ws_disconnect(self, user: UserContext, stream_name: str, reason: str) -> None:
+    async def _on_ws_disconnect(
+        self, user: UserContext, stream_name: str, reason: str
+    ) -> None:
         await self._publish_signal(
             self._error_signal(
                 user,
@@ -469,7 +476,7 @@ class TradingWorkerService:
         normalized_mobile = normalize_mobile(user.mobile)
         normalized_domain = normalize_domain(user.domain)
         bars = [state.bars_by_ts[k] for k in sorted(state.bars_by_ts.keys())]
-        if len(bars) < 30:
+        if len(bars) < 50:
             return self._error_signal(user, "Waiting for enough market bars")
 
         closes = [bar["close"] for bar in bars]
@@ -500,30 +507,33 @@ class TradingWorkerService:
         status = "hold"
         if bias in {"bullish", "bearish"}:
             action = "buy" if bias == "bullish" else "sell"
-            ordertype = "limit" if confidence >= 0.6 else "verbal"
+            ordertype = "limit" if confidence >= 0.6 else "market"
 
-            price = None
+            entry_price = now_price
             if ordertype == "limit":
                 direction = -1 if action == "buy" else 1
-                price = round(
+                entry_price = (
                     now_price
-                    + direction * spread * self.config.LIMIT_ORDER_SPREAD_FACTOR,
-                    2,
+                    + direction * spread * self.config.LIMIT_ORDER_SPREAD_FACTOR
                 )
 
-            stop_loss_seconds = int(90 + (1.0 - confidence) * 120)
-            take_profit_seconds = int(180 + confidence * 300)
+            stop_loss, take_profit = self._risk_levels(
+                action=action,
+                entry_price=entry_price,
+                atr14=atr14,
+                spread=spread,
+                confidence=confidence,
+            )
 
             recommendation = {
                 "action": action,
                 "ordertype": ordertype,
-                "price": price,
+                "price": round(entry_price, 2),
                 "units": self.config.DEFAULT_UNITS,
-                "stop_loss": stop_loss_seconds,
-                "take_profit": take_profit_seconds,
+                "stop_loss": stop_loss,
+                "take_profit": take_profit,
             }
             status = "signal"
-
         return {
             "ts": utc_now_ts(),
             "mobile": normalized_mobile,
@@ -595,6 +605,30 @@ class TradingWorkerService:
         use = trs[-period:] if len(trs) >= period else trs
         return float(sum(use) / len(use))
 
+    def _risk_levels(
+        self,
+        action: str,
+        entry_price: float,
+        atr14: float,
+        spread: float,
+        confidence: float,
+    ) -> tuple[float, float]:
+        base_distance = max(
+            atr14 * (1.2 + (1.0 - confidence) * 0.8),
+            spread * 2.5,
+            0.05,
+        )
+        reward_distance = base_distance * (1.6 + confidence * 1.2)
+
+        if action == "buy":
+            stop_loss = entry_price - base_distance
+            take_profit = entry_price + reward_distance
+        else:
+            stop_loss = entry_price + base_distance
+            take_profit = entry_price - reward_distance
+
+        return round(stop_loss, 2), round(take_profit, 2)
+
     def _wall_features(
         self, wall: Optional[dict[str, Any]]
     ) -> dict[str, Optional[float]]:
@@ -652,17 +686,18 @@ class TradingWorkerService:
         if ema21 > ema50:
             score += 0.8
             reasons.append("ema21 > ema50")
-        else:
+        elif ema21 < ema50:
             score -= 0.8
-            reasons.append("ema21 <= ema50")
+            reasons.append("ema21 < ema50")
 
         momentum = (
             closes[-1] - closes[-5] if len(closes) >= 5 else closes[-1] - closes[0]
         )
-        if momentum > 0:
+        momentum_threshold = max(abs(closes[-1]) * 0.0005, 0.02)
+        if momentum > momentum_threshold:
             score += 0.7
             reasons.append("momentum positive")
-        elif momentum < 0:
+        elif momentum < -momentum_threshold:
             score -= 0.7
             reasons.append("momentum negative")
 

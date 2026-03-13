@@ -27,7 +27,7 @@ spec:
     spec:
       containers:
         - name: redis
-          image: redis:7-alpine
+          image: redis:1.0.0.0
           command: ["sh", "-c", "redis-server --appendonly yes --requirepass \"$REDIS_PASSWORD\" --port 6379"]
           ports:
             - containerPort: 6379

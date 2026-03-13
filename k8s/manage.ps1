@@ -13,10 +13,10 @@ $RepoRoot = Resolve-Path (Join-Path $ScriptRoot "..")
 $BasePath = Join-Path $ScriptRoot "base"
 
 $Workers = @{
-    "api-server" = @{ File = "api-server.yaml"; Env = "workers/api_server/.env"; Image = "hivagold-api-server" }
-    "bot-auth-worker" = @{ File = "bot-auth-worker.yaml"; Env = "workers/bot_auth_worker/.env"; Image = "bot-auth-worker" }
+    "api-server"         = @{ File = "api-server.yaml"; Env = "workers/api_server/.env"; Image = "hivagold-api-server" }
+    "bot-auth-worker"    = @{ File = "bot-auth-worker.yaml"; Env = "workers/bot_auth_worker/.env"; Image = "bot-auth-worker" }
     "bot-captcha-worker" = @{ File = "bot-captcha-worker.yaml"; Env = "workers/bot_captcha_worker/.env"; Image = "bot-captcha-worker" }
-    "bot-room-worker" = @{ File = "bot-room-worker.yaml"; Env = "workers/bot_room_worker/.env"; Image = "bot-room-worker" }
+    "bot-room-worker"    = @{ File = "bot-room-worker.yaml"; Env = "workers/bot_room_worker/.env"; Image = "bot-room-worker" }
     "bot-trading-worker" = @{ File = "bot-trading-worker.yaml"; Env = "workers/bot_trading_worker/.env"; Image = "bot-trading-worker" }
 }
 
@@ -109,7 +109,7 @@ function LoadImagesToMinikube {
 
         if ($isMinikube) {
             Write-Host "[*] Loading $taggedImage into Minikube from local Docker daemon..." -ForegroundColor Cyan
-            minikube image load $taggedImage --overwrite=true
+            minikube image load $taggedImage --overwrite=false
             Write-Host "[OK] Loaded into Minikube: $taggedImage" -ForegroundColor Green
         }
         else {
@@ -169,7 +169,7 @@ function GetAll {
 
 function CheckAll {
     EnsureKubectl
-    kubectl get deployments,pods,svc,ingress -n hivagold -o wide
+    kubectl get deployments, pods, svc, ingress -n hivagold -o wide
 }
 
 function Status {

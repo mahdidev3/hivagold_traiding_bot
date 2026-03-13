@@ -307,7 +307,12 @@ class MarketDataClient:
                         await on_message(message)
             except ConnectionClosed as exc:
                 if not stop_event.is_set():
-                    self.logger.warning("ws %s closed code=%s reason=%s", name, getattr(exc, "code", None), getattr(exc, "reason", ""))
+                    self.logger.warning(
+                        "ws %s closed code=%s reason=%s",
+                        name,
+                        getattr(exc, "code", None),
+                        getattr(exc, "reason", ""),
+                    )
                     if on_disconnect is not None:
                         await on_disconnect(f"closed: {getattr(exc, 'code', None)}")
             except Exception as exc:

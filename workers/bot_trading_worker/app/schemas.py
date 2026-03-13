@@ -20,8 +20,8 @@ class SignalOrder(BaseModel):
     ordertype: str
     price: Optional[float] = None
     units: float
-    stop_loss: int
-    take_profit: int
+    stop_loss: Optional[float]
+    take_profit: Optional[float]
 
 
 class TradingSignal(BaseModel):
