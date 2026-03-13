@@ -11,7 +11,7 @@ class Config:
     TRADING_WORKER_HOST: str = os.getenv("TRADING_WORKER_HOST", "0.0.0.0")
     TRADING_WORKER_PORT: int = int(os.getenv("TRADING_WORKER_PORT", "8006"))
 
-    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
+    REDIS_HOST: str = os.getenv("REDIS_HOST", "redis")
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
     REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
     REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
@@ -38,6 +38,9 @@ class Config:
     LIMIT_ORDER_SPREAD_FACTOR: float = float(
         os.getenv("TRADING_LIMIT_ORDER_SPREAD_FACTOR", "0.25")
     )
+
+    ENABLE_STRATEGY_EMA_WALL_V1: bool = os.getenv("ENABLE_STRATEGY_EMA_WALL_V1", "true").lower() == "true"
+    REDIS_MARKET_EVENT_CHANNEL: str = os.getenv("REDIS_MARKET_EVENT_CHANNEL", "bot.market.events")
 
 
 config = Config()

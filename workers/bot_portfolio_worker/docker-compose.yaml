@@ -12,6 +12,9 @@ services:
     environment:
       - PORTFOLIO_WORKER_HOST=0.0.0.0
       - PORTFOLIO_WORKER_PORT=8007
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - REDIS_MARKET_EVENT_CHANNEL=${REDIS_MARKET_EVENT_CHANNEL:-bot.market.events}
     volumes:
       - ./data:/app/data
     healthcheck:
@@ -21,3 +24,11 @@ services:
       retries: 3
       start_period: 15s
     restart: unless-stopped
+
+    networks:
+      - hivagold
+
+networks:
+  hivagold:
+    name: hivagold
+    driver: bridge
