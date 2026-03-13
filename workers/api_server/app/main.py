@@ -12,6 +12,10 @@ from .schemas import (
     HealthResponse,
     LoginRequest,
     LogoutRequest,
+    PortfolioBotOrderRequest,
+    PortfolioOrderRequest,
+    PortfolioPriceTickRequest,
+    PortfolioRuleRequest,
     RoomActionRequest,
     RoomStatusRequest,
     RoomStatusResponse,
@@ -21,8 +25,8 @@ from .service import ApiServerService
 config = get_config()
 logger: Logger = setup_logger(config)
 
-auth_client, room_client, trading_client = build_clients(config, logger)
-service = ApiServerService(config, auth_client, room_client, trading_client, logger)
+auth_client, room_client, trading_client, portfolio_client = build_clients(config, logger)
+service = ApiServerService(config, auth_client, room_client, trading_client, portfolio_client, logger)
 queue_manager = ApiQueueManager(service, logger)
 
 
@@ -69,18 +73,6 @@ async def logout(payload: LogoutRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-# @app.post("/portfolio/create", response_model=ApiActionResponse)
-# async def create_portfolio(payload: RoomActionRequest):
-#     body = payload.model_dump(exclude_none=True)
-#     body.update(body.pop("payload", {}))
-#     try:
-#         logger.debug("Received create_portfolio request")
-#         result = await queue_manager.enqueue("create_portfolio", body)
-#         return ApiActionResponse(success=result.get("success", False), data=result)
-#     except Exception as exc:
-#         raise HTTPException(status_code=500, detail=str(exc))
-
-
 @app.get("/signals/latest", response_model=ApiActionResponse)
 async def signals_latest():
     try:
@@ -101,6 +93,36 @@ async def room_status(payload: RoomStatusRequest):
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@app.post("/portfolio/rules", response_model=ApiActionResponse)
+async def portfolio_rule(payload: PortfolioRuleRequest):
+    result = await queue_manager.enqueue("portfolio_rule_upsert", payload.model_dump())
+    return ApiActionResponse(success=result.get("success", False), data=result)
+
+
+@app.post("/portfolio/orders", response_model=ApiActionResponse)
+async def portfolio_order(payload: PortfolioOrderRequest):
+    result = await queue_manager.enqueue("portfolio_order_create", payload.model_dump(exclude_none=True))
+    return ApiActionResponse(success=result.get("success", False), data=result)
+
+
+@app.post("/portfolio/orders/bot", response_model=ApiActionResponse)
+async def portfolio_order_bot(payload: PortfolioBotOrderRequest):
+    result = await queue_manager.enqueue("portfolio_order_bot", payload.model_dump(exclude_none=True))
+    return ApiActionResponse(success=result.get("success", False), data=result)
+
+
+@app.post("/portfolio/price", response_model=ApiActionResponse)
+async def portfolio_price(payload: PortfolioPriceTickRequest):
+    result = await queue_manager.enqueue("portfolio_price_tick", payload.model_dump())
+    return ApiActionResponse(success=result.get("success", False), data=result)
+
+
+@app.get("/portfolio/users/{user_id}/stats", response_model=ApiActionResponse)
+async def portfolio_user_stats(user_id: str):
+    result = await queue_manager.enqueue("portfolio_user_stats", {"user_id": user_id})
+    return ApiActionResponse(success=result.get("user_id") is not None, data=result)
 
 
 @app.post("/room/{action_name}", response_model=ApiActionResponse)

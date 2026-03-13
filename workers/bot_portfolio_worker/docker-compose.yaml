@@ -1,0 +1,23 @@
+services:
+  portfolio-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bot-portfolio-worker:latest
+    container_name: portfolio-worker
+    env_file:
+      - .env
+    ports:
+      - "${PORTFOLIO_WORKER_PORT:-8007}:8007"
+    environment:
+      - PORTFOLIO_WORKER_HOST=0.0.0.0
+      - PORTFOLIO_WORKER_PORT=8007
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
