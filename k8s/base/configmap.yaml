@@ -4,7 +4,7 @@ metadata:
   name: hivagold-config
   namespace: hivagold
 data:
-  ENVIRONMENT: production
+  ENVIRONMENT: development
   APP_VERSION: "1.0.0"
 
   # Service discovery (internal cluster DNS)
