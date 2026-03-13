@@ -35,11 +35,13 @@ class TradingSignal(BaseModel):
     reasons: List[str] = Field(default_factory=list)
     recommendation: Optional[SignalOrder] = None
     metrics: Dict[str, Any] = Field(default_factory=dict)
+    strategy: str = "system"
     error: Optional[str] = None
 
 
 class WorkerBaseResponse(BaseModel):
     success: bool
+    strategy: str = "system"
     error: Optional[str] = None
 
 
