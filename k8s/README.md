@@ -23,10 +23,6 @@ This folder contains a full baseline Kubernetes setup for the Hivagold trading b
 
 ## Notes
 
-- Container images are currently referenced as:
-  - `hivagold-api-server:latest`
-  - `bot-auth-worker:latest`
-  - `bot-captcha-worker:latest`
-  - `bot-room-worker:latest`
-  - `bot-trading-worker:latest`
-- Update these image names/tags for your registry in production.
+- Container images are managed per worker via each worker `.env` (`APP_VERSION`) and can be synced into manifests with `k8s/manage.ps1 sync-images`.
+- Initial defaults are `1.0.0.0` for all workers.
+- You can set different `APP_VERSION` values per worker and run `k8s/manage.ps1 update <worker-name>` to roll out only one worker.
