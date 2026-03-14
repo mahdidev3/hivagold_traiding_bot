@@ -168,11 +168,31 @@ class TradingWorkerService:
             except Exception:
                 self._listeners.discard(queue)
 
-        await asyncio.to_thread(self.redis_client.redis_client.publish, self.config.REDIS_MARKET_EVENT_CHANNEL, json.dumps({"event": "signal", "payload": signal}, ensure_ascii=False))
+        try:
+            await asyncio.to_thread(
+                self.redis_client.publish_event,
+                self.config.REDIS_MARKET_EVENT_CHANNEL,
+                {"event": "signal", "payload": signal},
+            )
+        except Exception as exc:
+            self.logger.warning("signal publish error: %s", exc)
 
     async def _publish_market_event(self, user: UserContext, event_type: str, payload: dict[str, Any]) -> None:
-        event = {"event": event_type, "mobile": normalize_mobile(user.mobile), "domain": normalize_domain(user.domain), "ts": utc_now_ts(), "payload": payload}
-        await asyncio.to_thread(self.redis_client.redis_client.publish, self.config.REDIS_MARKET_EVENT_CHANNEL, json.dumps(event, ensure_ascii=False))
+        event = {
+            "event": event_type,
+            "mobile": normalize_mobile(user.mobile),
+            "domain": normalize_domain(user.domain),
+            "ts": utc_now_ts(),
+            "payload": payload,
+        }
+        try:
+            await asyncio.to_thread(
+                self.redis_client.publish_event,
+                self.config.REDIS_MARKET_EVENT_CHANNEL,
+                event,
+            )
+        except Exception as exc:
+            self.logger.warning("market event publish error (%s): %s", event_type, exc)
 
     def _ws_urls(self, domain: str) -> dict[str, str]:
         normalized = normalize_base_url(domain)

@@ -111,6 +111,9 @@ class HivagoldRedisClient:
     def __init__(self, redis_pool: redis.ConnectionPool):
         self.redis_pool = redis_pool
         self.logger = logging.getLogger(__name__)
+        # Backward compatibility: existing service code accesses `.redis_client`.
+        # Keep a shared redis handle for pub/sub operations.
+        self.redis_client = self._redis_connection()
 
     def _redis_connection(self) -> redis.Redis:
         return redis.Redis(connection_pool=self.redis_pool, decode_responses=True)
@@ -152,6 +155,10 @@ class HivagoldRedisClient:
             len(attempted_keys),
         )
         return None
+
+    def publish_event(self, channel: str, event: Dict[str, Any]) -> int:
+        payload = json.dumps(event, ensure_ascii=False)
+        return int(self.redis_client.publish(channel, payload))
 
 
 class MarketDataClient:
