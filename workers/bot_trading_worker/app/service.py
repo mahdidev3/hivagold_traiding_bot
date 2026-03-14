@@ -269,9 +269,14 @@ class TradingWorkerService:
                     pass
 
     def _build_ws_headers(self, domain: str, session: requests.Session, cookies: dict[str, str]) -> dict[str, str]:
+        normalized = normalize_base_url(domain)
+        parsed = urlparse(normalized)
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+
         return {
             "User-Agent": session.headers.get("User-Agent", "Mozilla/5.0"),
             "Cookie": cookie_header(cookies),
+            "Origin": origin,
             "Pragma": "no-cache",
             "Cache-Control": "no-cache",
             "Accept-Language": session.headers.get("Accept-Language", "en-US,en;q=0.9"),

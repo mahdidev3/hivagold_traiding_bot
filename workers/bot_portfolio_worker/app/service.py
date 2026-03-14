@@ -116,6 +116,9 @@ class PortfolioWorkerService:
         return {"success": False, "error": f"Unknown action: {action}"}
     async def on_market_event(self, event: dict[str, Any]) -> dict[str, Any]:
         event_type = event.get("event")
+        self.logger.debug("*********")
+        self.logger.debug(event)
+        self.logger.debug("*********")
         payload = event.get("payload") or {}
         if event_type == "signal":
             return await self._handle_signal(payload)

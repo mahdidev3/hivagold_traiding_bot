@@ -296,9 +296,12 @@ class MarketDataClient:
         while not stop_event.is_set():
             background_task: Optional[asyncio.Task] = None
             try:
+                ws_headers = dict(headers)
+                origin = ws_headers.pop("Origin", None)
+
                 connect_kwargs: Dict[str, Any] = {
-                    "additional_headers": headers,
-                    "origin": headers.get("Origin"),
+                    "additional_headers": ws_headers,
+                    "origin": origin,
                     "ping_interval": None,
                     "ping_timeout": None,
                     "close_timeout": 10,
