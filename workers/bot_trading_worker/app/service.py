@@ -374,7 +374,12 @@ class TradingWorkerService:
         bars = [state.bars_by_ts[k] for k in sorted(state.bars_by_ts.keys())]
         now_price = state.latest_price if state.latest_price is not None else bars[-1]["close"]
         snapshot = MarketSnapshot(now_ts=utc_now_ts(), bars=bars, latest_price=now_price, latest_wall=state.latest_wall, last_error=state.last_error)
-        base_payload = {"ts": snapshot.now_ts, "mobile": normalize_mobile(user.mobile), "domain": normalize_domain(user.domain)}
+        base_payload = {
+            "ts": snapshot.now_ts,
+            "mobile": normalize_mobile(user.mobile),
+            "domain": normalize_domain(user.domain),
+            "symbol": self.config.BARS_SYMBOL,
+        }
         return [module.evaluate(snapshot, base_payload) for module in self._modules]
 
     def _error_signal(self, user: UserContext, error: str, status: str = "error", strategy: str = "system") -> dict[str, Any]:

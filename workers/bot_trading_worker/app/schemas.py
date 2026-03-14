@@ -28,6 +28,7 @@ class TradingSignal(BaseModel):
     ts: int
     mobile: str
     domain: str
+    symbol: str = "xag"
     status: str
     bias: str
     score: float

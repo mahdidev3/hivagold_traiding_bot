@@ -35,7 +35,7 @@ tests/
 - **bot_room_worker**: portfolio/order/transaction management endpoints against Hivagold room APIs.
 - **bot_trading_worker**: keeps existing `price`/`live-bars`/`wall` websocket streams, runs enabled strategy modules, publishes signals + market events.
 - **bot_captcha_worker**: dedicated captcha solving endpoint used by auth flow.
-- **bot_portfolio_worker**: strategy tester (per-strategy virtual portfolio) that consumes Redis events and stores trade history + win rate + pnl.
+- **bot_portfolio_worker**: strategy tester (per-strategy virtual portfolio) that consumes Redis events, stores position symbol, and updates only matching-symbol positions for each price tick.
 - **redis_worker**: shared cache/session store and worker-to-worker event channel.
 
 ---
