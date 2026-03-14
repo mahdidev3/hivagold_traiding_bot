@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 from logging import Logger
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Header, HTTPException
 
 from config import get_config
 from .clients import build_clients
@@ -40,6 +40,11 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION, lifespan=lifespan)
+
+
+def require_admin_key(x_admin_key: str = Header(default="")):
+    if x_admin_key != config.ADMIN_API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid admin API key")
 
 
 @app.get("/health", response_model=HealthResponse)
@@ -123,6 +128,25 @@ async def portfolio_price(payload: PortfolioPriceTickRequest):
 async def portfolio_user_stats(user_id: str):
     result = await queue_manager.enqueue("portfolio_user_stats", {"user_id": user_id})
     return ApiActionResponse(success=result.get("user_id") is not None, data=result)
+
+
+@app.get("/portfolio/db/records", response_model=ApiActionResponse)
+async def portfolio_db_records():
+    result = await queue_manager.enqueue("portfolio_db_records", {})
+    return ApiActionResponse(success=result.get("success", False), data=result)
+
+
+@app.get("/portfolio/strategies/{strategy}/pnl-positions", response_model=ApiActionResponse)
+async def portfolio_strategy_pnl_positions(strategy: str):
+    result = await queue_manager.enqueue("portfolio_strategy_pnl_positions", {"strategy": strategy})
+    return ApiActionResponse(success=result.get("success", False), data=result)
+
+
+@app.get("/admin/db/all", response_model=ApiActionResponse)
+async def admin_db_all(x_admin_key: str = Header(default="", alias="x-admin-key")):
+    require_admin_key(x_admin_key)
+    result = await queue_manager.enqueue("portfolio_admin_db", {})
+    return ApiActionResponse(success=result.get("success", False), data=result)
 
 
 @app.post("/room/{action_name}", response_model=ApiActionResponse)

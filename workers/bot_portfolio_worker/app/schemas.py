@@ -21,3 +21,15 @@ class ProcessPortfolioRequest(BaseModel):
 
 class ProcessPortfolioResponse(WorkerBaseResponse):
     result: Optional[dict[str, Any]] = None
+
+
+class StrategyPnlPositionResponse(WorkerBaseResponse):
+    result: dict[str, Any] = Field(default_factory=dict)
+
+
+class DbRecordsResponse(WorkerBaseResponse):
+    result: dict[str, Any] = Field(default_factory=dict)
+
+
+class AdminDbResponse(WorkerBaseResponse):
+    result: dict[str, Any] = Field(default_factory=dict)

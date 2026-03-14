@@ -141,3 +141,14 @@ def test_portfolio_actions_route_to_portfolio_worker():
 
     stats = service.execute("portfolio_user_stats", {"user_id": "u1"})
     assert stats["path"] == "/portfolio/users/u1/stats"
+
+    records = service.execute("portfolio_db_records", {})
+    assert records["path"] == "/portfolio/db/records"
+
+    pnl_positions = service.execute(
+        "portfolio_strategy_pnl_positions", {"strategy": "ema_wall_v1"}
+    )
+    assert pnl_positions["path"] == "/portfolio/strategies/ema_wall_v1/pnl-positions"
+
+    admin = service.execute("portfolio_admin_db", {})
+    assert admin["path"] == "/portfolio/admin/db"

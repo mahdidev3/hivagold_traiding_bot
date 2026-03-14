@@ -16,6 +16,7 @@ class Config:
     TRADING_WORKER_URL: str = os.getenv("TRADING_WORKER_URL", "http://localhost:8006")
     PORTFOLIO_WORKER_URL: str = os.getenv("PORTFOLIO_WORKER_URL", "http://localhost:8007")
     PORTFOLIO_WORKER_API_KEY: str = os.getenv("PORTFOLIO_WORKER_API_KEY", "change-me")
+    ADMIN_API_KEY: str = os.getenv("ADMIN_API_KEY", "change-me-admin")
 
     DEFAULT_MARKET: str = os.getenv("DEFAULT_MARKET", "xag")
     MARKET_CHOICES: tuple[str, ...] = ("xag", "mazaneh", "ounce")

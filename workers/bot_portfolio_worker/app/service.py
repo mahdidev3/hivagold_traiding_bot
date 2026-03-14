@@ -228,6 +228,53 @@ class PortfolioWorkerService:
             rows = conn.execute("SELECT strategy FROM strategy_portfolios ORDER BY strategy").fetchall()
         return [row["strategy"] for row in rows]
 
+    def list_positions(self, strategy: str | None = None) -> list[dict[str, Any]]:
+        query = "SELECT * FROM strategy_positions"
+        params: tuple[Any, ...] = ()
+        if strategy:
+            query += " WHERE strategy=?"
+            params = (strategy,)
+        query += " ORDER BY id DESC"
+        with self._conn() as conn:
+            rows = conn.execute(query, params).fetchall()
+        return [dict(row) for row in rows]
+
+    def db_records(self) -> dict[str, Any]:
+        with self._conn() as conn:
+            portfolios = [
+                dict(row)
+                for row in conn.execute(
+                    "SELECT * FROM strategy_portfolios ORDER BY strategy"
+                ).fetchall()
+            ]
+        positions = self.list_positions()
+        return {
+            "portfolios": portfolios,
+            "positions": positions,
+            "counts": {
+                "portfolios": len(portfolios),
+                "positions": len(positions),
+            },
+        }
+
+    def strategy_pnl_positions(self, strategy: str) -> dict[str, Any]:
+        return {
+            "strategy": strategy,
+            "stats": self.strategy_stats(strategy),
+            "positions": self.list_positions(strategy),
+        }
+
+    def admin_all_data(self) -> dict[str, Any]:
+        strategies = self.list_strategies()
+        by_strategy = {
+            strategy: self.strategy_pnl_positions(strategy)
+            for strategy in strategies
+        }
+        return {
+            "db": self.db_records(),
+            "strategies": by_strategy,
+        }
+
     def _should_enter(self, order: Position, price: float) -> bool:
         if order.entry_price is None:
             return True
