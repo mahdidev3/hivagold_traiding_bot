@@ -10,8 +10,8 @@ This worker was redesigned to act as a **strategy backtest/simulation sink** for
   - `live-bars`
   - `wall`
   - `signal`
-- Opens virtual positions on `signal` events.
-- Evaluates open/pending positions on `price` events.
+- Opens virtual positions on `signal` events and stores `symbol` per position.
+- Evaluates open/pending positions only for matching-symbol `price` events.
 - Stores trade history and computes:
   - wins/losses
   - win rate
@@ -26,12 +26,12 @@ Examples:
 ```
 
 ```json
-{"event":"signal","payload":{"strategy":"ema_wall_v1","status":"signal","recommendation":{"action":"buy","ordertype":"market","price":2481.2,"units":1,"take_profit":2491.2,"stop_loss":2473.0}}}
+{"event":"signal","payload":{"strategy":"ema_wall_v1","symbol":"xag","status":"signal","recommendation":{"action":"buy","ordertype":"market","price":2481.2,"units":1,"take_profit":2491.2,"stop_loss":2473.0}}}
 ```
 
 ## Database tables
 - `strategy_portfolios`
-- `strategy_positions`
+- `strategy_positions` (includes `symbol` column)
 
 ## API (queue-based)
 All endpoints except `/health` require `x-api-key`.
@@ -47,7 +47,7 @@ All endpoints except `/health` require `x-api-key`.
 
 Supported actions:
 - `event` → manually push one event payload
-- `price_tick` → manual price simulation
+- `price_tick` → manual price simulation (supports optional `symbol` to target matching positions only)
 - `strategy_stats` → strategy performance snapshot
 - `list_strategies` → discovered strategy portfolios
 - `status`

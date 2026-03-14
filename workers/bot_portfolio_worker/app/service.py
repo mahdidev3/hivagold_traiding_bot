@@ -16,6 +16,7 @@ from config import Config
 class Position:
     id: int
     strategy: str
+    symbol: str
     side: str
     status: str
     entry_type: str
@@ -80,6 +81,7 @@ class PortfolioWorkerService:
                 CREATE TABLE IF NOT EXISTS strategy_positions (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     strategy TEXT NOT NULL,
+                    symbol TEXT NOT NULL DEFAULT 'unknown',
                     side TEXT NOT NULL,
                     status TEXT NOT NULL,
                     entry_type TEXT NOT NULL,
@@ -96,6 +98,20 @@ class PortfolioWorkerService:
                 );
                 """
             )
+            columns = {
+                row["name"]
+                for row in conn.execute("PRAGMA table_info(strategy_positions)").fetchall()
+            }
+            if "symbol" not in columns:
+                conn.execute(
+                    "ALTER TABLE strategy_positions ADD COLUMN symbol TEXT NOT NULL DEFAULT 'unknown'"
+                )
+            conn.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_strategy_positions_symbol_status
+                ON strategy_positions(symbol, status)
+                """
+            )
 
 
     async def process(self, args: dict[str, Any]) -> dict[str, Any]:
@@ -105,7 +121,8 @@ class PortfolioWorkerService:
             return {"success": True, "result": await self.on_market_event(payload)}
         if action == "price_tick":
             price = float(payload.get("price"))
-            return {"success": True, "result": await self.process_price_tick(price)}
+            symbol = self._normalize_symbol(payload.get("symbol"))
+            return {"success": True, "result": await self.process_price_tick(price, symbol=symbol)}
         if action == "strategy_stats":
             strategy = str(payload.get("strategy", "")).strip()
             return {"success": True, "result": self.strategy_stats(strategy)}
@@ -114,6 +131,7 @@ class PortfolioWorkerService:
         if action == "status":
             return {"success": True, "result": {"running": self._running, "strategies": self.list_strategies()}}
         return {"success": False, "error": f"Unknown action: {action}"}
+
     async def on_market_event(self, event: dict[str, Any]) -> dict[str, Any]:
         event_type = event.get("event")
         self.logger.debug("*********")
@@ -131,6 +149,7 @@ class PortfolioWorkerService:
             return {"success": True, "ignored": "no-trade-signal"}
         recommendation = signal.get("recommendation") or {}
         strategy = signal.get("strategy") or "unknown"
+        symbol = self._extract_signal_symbol(signal, recommendation)
         side = recommendation.get("action")
         if side not in {"buy", "sell"}:
             return {"success": True, "ignored": "invalid-side"}
@@ -157,11 +176,12 @@ class PortfolioWorkerService:
                 opened_price = float(price) if (entry_type == "market" and price is not None) else None
                 conn.execute(
                     """
-                    INSERT INTO strategy_positions(strategy, side, status, entry_type, entry_price, opened_price, take_profit, stop_loss, volume, created_at, updated_at)
-                    VALUES(?,?,?,?,?,?,?,?,?,?,?)
+                    INSERT INTO strategy_positions(strategy, symbol, side, status, entry_type, entry_price, opened_price, take_profit, stop_loss, volume, created_at, updated_at)
+                    VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
                     """,
                     (
                         strategy,
+                        symbol,
                         side,
                         "open" if entry_type == "market" else "pending",
                         entry_type,
@@ -180,14 +200,23 @@ class PortfolioWorkerService:
         price = payload.get("price")
         if not isinstance(price, (int, float)):
             return {"success": True, "ignored": "bad-price"}
-        return await self.process_price_tick(float(price))
+        symbol = self._normalize_symbol(payload.get("symbol"))
+        return await self.process_price_tick(float(price), symbol=symbol)
 
-    async def process_price_tick(self, price: float) -> dict[str, Any]:
+    async def process_price_tick(self, price: float, symbol: Optional[str] = None) -> dict[str, Any]:
         async with self._lock:
             entered = 0
             closed = 0
+            position_filter = ""
+            params: tuple[Any, ...] = ()
+            if symbol:
+                position_filter = " AND symbol=?"
+                params = (symbol,)
             with self._conn() as conn:
-                rows = conn.execute("SELECT * FROM strategy_positions WHERE status IN ('pending','open')").fetchall()
+                rows = conn.execute(
+                    f"SELECT * FROM strategy_positions WHERE status IN ('pending','open'){position_filter}",
+                    params,
+                ).fetchall()
                 for row in rows:
                     order = Position(**dict(row))
                     if order.status == "pending" and self._should_enter(order, price):
@@ -200,7 +229,7 @@ class PortfolioWorkerService:
                             pnl = self._calc_pnl(order, price)
                             conn.execute("UPDATE strategy_positions SET status='closed', closed_price=?, pnl=?, closed_reason=?, updated_at=? WHERE id=?", (price, pnl, reason, self._now(), order.id))
                             closed += 1
-            return {"success": True, "entered": entered, "closed": closed}
+            return {"success": True, "entered": entered, "closed": closed, "symbol": symbol}
 
     def strategy_stats(self, strategy: str) -> dict[str, Any]:
         with self._conn() as conn:
@@ -302,6 +331,19 @@ class PortfolioWorkerService:
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    def _normalize_symbol(self, value: Any) -> Optional[str]:
+        if not isinstance(value, str):
+            return None
+        symbol = value.strip().lower()
+        return symbol or None
+
+    def _extract_signal_symbol(self, signal: dict[str, Any], recommendation: dict[str, Any]) -> str:
+        return (
+            self._normalize_symbol(signal.get("symbol"))
+            or self._normalize_symbol(recommendation.get("symbol"))
+            or "unknown"
+        )
 
     async def _event_consumer_loop(self):
         pubsub = self.redis_client.pubsub(ignore_subscribe_messages=True)
