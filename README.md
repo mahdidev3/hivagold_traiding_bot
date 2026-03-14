@@ -230,6 +230,25 @@ Latest signals:
 curl http://localhost:8000/signals/latest
 ```
 
+Portfolio DB records (via api-server):
+
+```bash
+curl http://localhost:8000/portfolio/db/records
+```
+
+Strategy PnL + positions (via api-server):
+
+```bash
+curl http://localhost:8000/portfolio/strategies/ema_wall_v1/pnl-positions
+```
+
+Admin full DB snapshot (via api-server):
+
+```bash
+curl http://localhost:8000/admin/db/all \
+  -H "x-admin-key: change-me-admin"
+```
+
 Room status:
 
 ```bash
@@ -248,7 +267,9 @@ curl -X POST http://localhost:8000/room/orders \
 
 ### Portfolio Strategy Tester API (direct worker)
 
-Portfolio worker is queue-based and currently uses:
+All direct portfolio-worker endpoints require `x-api-key`.
+
+Queue API:
 
 `POST http://localhost:8007/portfolio/process`
 
@@ -257,6 +278,22 @@ curl -X POST http://localhost:8007/portfolio/process \
   -H "Content-Type: application/json" \
   -H "x-api-key: change-me" \
   -d '{"action":"status","payload":{}}'
+```
+
+Read APIs:
+
+```bash
+# all records in strategy_portfolios + strategy_positions
+curl http://localhost:8007/portfolio/db/records \
+  -H "x-api-key: change-me"
+
+# per-strategy pnl + positions
+curl http://localhost:8007/portfolio/strategies/ema_wall_v1/pnl-positions \
+  -H "x-api-key: change-me"
+
+# admin snapshot of DB + per-strategy aggregates
+curl http://localhost:8007/portfolio/admin/db \
+  -H "x-api-key: change-me"
 ```
 
 List discovered strategies:

@@ -76,3 +76,42 @@ def test_pending_position_enters_then_stops(tmp_path: Path):
     asyncio.run(service.process_price_tick(11.0))
     stats = service.strategy_stats("ema_wall_v1")
     assert stats["losses"] == 1
+
+
+def test_db_records_and_admin_all_data(tmp_path: Path):
+    cfg = DummyConfig()
+    cfg.DATABASE_PATH = str(tmp_path / "portfolio3.db")
+    service = PortfolioWorkerService(cfg, logger=__import__("logging").getLogger("t"))
+    service._init_db()
+
+    asyncio.run(
+        service.on_market_event(
+            {
+                "event": "signal",
+                "payload": {
+                    "strategy": "ema_wall_v1",
+                    "status": "signal",
+                    "recommendation": {
+                        "action": "buy",
+                        "ordertype": "market",
+                        "price": 10.0,
+                        "units": 1,
+                        "take_profit": 12.0,
+                        "stop_loss": 8.0,
+                    },
+                },
+            }
+        )
+    )
+
+    records = service.db_records()
+    assert records["counts"]["portfolios"] == 1
+    assert records["counts"]["positions"] == 1
+
+    pnl_positions = service.strategy_pnl_positions("ema_wall_v1")
+    assert pnl_positions["strategy"] == "ema_wall_v1"
+    assert len(pnl_positions["positions"]) == 1
+
+    admin_data = service.admin_all_data()
+    assert "db" in admin_data
+    assert "ema_wall_v1" in admin_data["strategies"]

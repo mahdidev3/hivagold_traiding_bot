@@ -52,6 +52,23 @@ Supported actions:
 - `list_strategies` → discovered strategy portfolios
 - `status`
 
+### Read endpoints
+- `GET /portfolio/db/records` → returns all DB rows from `strategy_portfolios` and `strategy_positions` with counts.
+- `GET /portfolio/strategies/{strategy}/pnl-positions` → returns strategy stats + all positions for the strategy.
+- `GET /portfolio/admin/db` → returns full DB snapshot + per-strategy aggregates (admin view).
+
+Examples:
+```bash
+curl http://localhost:8007/portfolio/db/records \
+  -H "x-api-key: change-me"
+
+curl http://localhost:8007/portfolio/strategies/ema_wall_v1/pnl-positions \
+  -H "x-api-key: change-me"
+
+curl http://localhost:8007/portfolio/admin/db \
+  -H "x-api-key: change-me"
+```
+
 ## Environment
 - `REDIS_HOST=redis`
 - `REDIS_PORT=6379`

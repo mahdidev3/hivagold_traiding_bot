@@ -70,6 +70,13 @@ class ApiServerService:
             return self.portfolio_client.post("/portfolio/price", payload)
         if action == "portfolio_user_stats":
             return self.portfolio_client.get(f"/portfolio/users/{payload['user_id']}/stats")
+        if action == "portfolio_db_records":
+            return self.portfolio_client.get("/portfolio/db/records")
+        if action == "portfolio_strategy_pnl_positions":
+            strategy = payload["strategy"]
+            return self.portfolio_client.get(f"/portfolio/strategies/{strategy}/pnl-positions")
+        if action == "portfolio_admin_db":
+            return self.portfolio_client.get("/portfolio/admin/db")
         if action == "room_action":
             endpoint = payload.pop("endpoint")
             try:
