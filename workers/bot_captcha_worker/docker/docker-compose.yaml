@@ -1,12 +1,12 @@
 services:
   captcha-worker:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     image: bot-captcha-worker:latest
     container_name: captcha-worker
     env_file:
-      - .env
+      - ../.env
     ports:
       - "${CAPTCHA_WORKER_PORT:-8001}:8001"
     environment:

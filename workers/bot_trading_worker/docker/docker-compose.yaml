@@ -1,22 +1,19 @@
 services:
   trading-worker:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     image: bot-trading-worker:latest
     container_name: trading-worker
     env_file:
-      - .env
+      - ../.env
     ports:
       - "${TRADING_WORKER_PORT:-8006}:8006"
     environment:
       - TRADING_WORKER_HOST=0.0.0.0
       - TRADING_WORKER_PORT=8006
-      - REDIS_HOST=${REDIS_HOST:-redis}
-      - REDIS_PORT=${REDIS_PORT:-6379}
-      - REDIS_MARKET_EVENT_CHANNEL=${REDIS_MARKET_EVENT_CHANNEL:-bot.market.events}
     volumes:
-      - ./users.json:/app/users.json:ro
+      - ../users.json:/app/users.json:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
       interval: 30s

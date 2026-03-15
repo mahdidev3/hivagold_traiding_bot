@@ -1,12 +1,12 @@
 services:
   api-server:
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: docker/Dockerfile
     image: hivagold-api-server:latest
     container_name: hivagold-api-server
     env_file:
-      - .env
+      - ../.env
     ports:
       - "${API_SERVER_PORT:-8000}:8000"
     environment:
