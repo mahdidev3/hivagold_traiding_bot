@@ -7,7 +7,7 @@ from config import Config
 from .clients import (
     CaptchaWorkerClient,
     MainApiClient,
-    RedisClient,
+    UserSessionStore,
     normalize_domain_key,
     normalize_mobile,
 )
@@ -22,13 +22,13 @@ class LoginWorkerService:
         self,
         api_client: MainApiClient,
         captcha_worker_client: CaptchaWorkerClient,
-        redis_client: RedisClient,
+        session_store: UserSessionStore,
         config: Config,
         logger: logging.Logger,
     ):
         self.api = api_client
         self.captcha_worker = captcha_worker_client
-        self.redis_client = redis_client
+        self.session_store = session_store
         self.config = config
         self.logger = logger
 
@@ -121,11 +121,11 @@ class LoginWorkerService:
             cookies_validation_url,
         )
 
-        login_data = self.redis_client.get_login_data(
+        login_data = self.session_store.get_login_data(
             normalized_mobile, normalized_base_domain
         )
         self.logger.debug(
-            "[login] redis lookup done found=%s keys=%s",
+            "[login] session store lookup done found=%s keys=%s",
             bool(login_data),
             list(login_data.keys()) if login_data else [],
         )
@@ -215,16 +215,16 @@ class LoginWorkerService:
             )
 
             if login_response.status_code == 200:
-                self.logger.info("[login] login success, saving to redis")
+                self.logger.info("[login] login success, saving to user file store")
                 session_data = {
                     "cookies": cookies,
                     "headers": headers or {},
                 }
-                self.redis_client.save_login_data(
+                self.session_store.save_login_data(
                     normalized_mobile,
                     session_data,
                     normalized_base_domain,
-                    self.config.REDIS_TTL,
+                    self.config.SESSION_TTL_SECONDS,
                 )
                 self.logger.info("[login] saved login data, returning success")
                 return True, session_data
@@ -248,7 +248,7 @@ class LoginWorkerService:
         normalized_base_domain = normalize_domain_key(base_domain)
         if not normalized_mobile:
             return False
-        deleted_count = self.redis_client.delete_login_data(
+        deleted_count = self.session_store.delete_login_data(
             normalized_mobile, normalized_base_domain
         )
         self.logger.info(

@@ -1,5 +1,6 @@
 import logging
 from typing import Any, Protocol
+from urllib.parse import urlparse
 
 import requests
 
@@ -29,6 +30,37 @@ class ApiServerService:
         self.portfolio_client = portfolio_client
         self.logger = logger or logging.getLogger(__name__)
 
+    def _normalize_mobile(self, mobile: str) -> str:
+        value = "".join(ch for ch in (mobile or "").strip() if ch.isdigit())
+        if value.startswith("0098") and len(value) >= 12:
+            value = "0" + value[4:]
+        elif value.startswith("98") and len(value) >= 12:
+            value = "0" + value[2:]
+        elif len(value) == 10 and not value.startswith("0"):
+            value = f"0{value}"
+        return value
+
+    def _normalize_base_domain(self, base_domain: str | None) -> str | None:
+        if not base_domain:
+            return None
+        value = base_domain.strip()
+        if not value:
+            return None
+        parsed = urlparse(value if "://" in value else f"https://{value}")
+        if not parsed.netloc:
+            return None
+        return f"{parsed.scheme}://{parsed.netloc}"
+
+    def _prepare_auth_payload(self, payload: dict[str, Any]) -> dict[str, Any]:
+        prepared = payload.copy()
+        prepared["mobile"] = self._normalize_mobile(prepared.get("mobile", ""))
+        if not prepared["mobile"]:
+            raise ValueError("Invalid mobile number")
+        normalized_domain = self._normalize_base_domain(prepared.get("base_domain"))
+        if normalized_domain:
+            prepared["base_domain"] = normalized_domain
+        return prepared
+
     def _normalize_market(self, market: str | None) -> str:
         selected = (market or self.config.DEFAULT_MARKET).strip().lower()
         if selected not in self.config.MARKET_CHOICES:
@@ -49,9 +81,9 @@ class ApiServerService:
     def execute(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
         self.logger.debug("Executing action=%s", action)
         if action == "login":
-            return self.auth_client.post("/login", payload)
+            return self.auth_client.post("/login", self._prepare_auth_payload(payload))
         if action == "logout":
-            return self.auth_client.post("/logout", payload)
+            return self.auth_client.post("/logout", self._prepare_auth_payload(payload))
         if action == "create_portfolio":
             return self.room_client.post("/room/portfolio/create", payload)
         if action == "get_signals":

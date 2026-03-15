@@ -19,9 +19,9 @@ from config import build_api_url, get_config
 config = get_config()
 logger: Logger = setup_logger(config)
 
-api_client, captcha_worker_client, redis_client = build_clients(config, logger)
+api_client, captcha_worker_client, session_store = build_clients(config, logger)
 service = LoginWorkerService(
-    api_client, captcha_worker_client, redis_client, config, logger
+    api_client, captcha_worker_client, session_store, config, logger
 )
 queue_manager = LoginQueueManager(service, logger)
 
