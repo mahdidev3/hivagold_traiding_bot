@@ -1,22 +1,29 @@
-# Hivagold Trading Bot — Local Mode Guide
+# Hivagold Trading Bot
 
-This README is focused on **running everything locally with Python** and using **one shared `.venv`** for the whole project.
+Monorepo for Hivagold trading automation services (FastAPI workers + gateway API + Kubernetes manifests).
+
+## Services overview
+
+| Service | Default Port | Responsibility |
+|---|---:|---|
+| `api_server` | `8000` | Public gateway that proxies auth/room/trading/simulator APIs |
+| `bot_captcha_worker` | `8001` | Download and solve captcha images |
+| `bot_auth_worker` | `8002` | Login/logout flow and user session/header persistence |
+| `bot_room_worker` | `8005` | Portfolio/order/transaction actions against room APIs |
+| `bot_trading_worker` | `8006` | Bot runtime, market streams, event feed (`signals`) |
+| `bot_simulator_worker` | `8007` | File-based portfolio simulator |
 
 ---
 
-## 1) Create one `.venv` for the whole project
+## Local development (single `.venv`)
 
-From repository root:
+From repo root:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-```
 
-Install all worker dependencies into the same environment:
-
-```bash
 pip install -r workers/api_server/requirements.txt
 pip install -r workers/bot_auth_worker/requirements.txt
 pip install -r workers/bot_captcha_worker/requirements.txt
@@ -26,327 +33,112 @@ pip install -r workers/bot_simulator_worker/requirements.txt
 pip install pytest
 ```
 
-> You only need this one `.venv` at repo root. Do **not** create separate virtual environments inside each worker.
+## Run locally
 
----
-
-## 2) Run in local mode (Python only)
-
-Start Redis (required by workers):
+Start Redis (used by room/auth related flows):
 
 ```bash
 docker run --rm -p 6379:6379 --name hivagold-redis redis:7
 ```
 
-Then open one terminal per service (with `.venv` activated):
+Run workers (one terminal each):
 
 ```bash
-# terminal 1
 cd workers/bot_captcha_worker && python run.py
-
-# terminal 2
 cd workers/bot_auth_worker && python run.py
-
-# terminal 3
 cd workers/bot_room_worker && python run.py
-
-# terminal 4
 cd workers/bot_trading_worker && python run.py
-
-# terminal 5
 cd workers/bot_simulator_worker && python run.py
-
-# terminal 6
 cd workers/api_server && python run.py
 ```
 
-API Server will be available at:
-
-- `http://localhost:8000`
+Gateway URL: `http://localhost:8000`
 
 ---
 
-## 3) Test credentials used in examples
-
-All request examples below use:
-
-- **mobile:** `09133040700`
-- **password:** `Amir@700`
-- **base_domain:** `https://hivagold.com`
-
----
-
-## 4) API Server APIs (`http://localhost:8000`)
+## API gateway endpoints (`api_server`)
 
 ### Health
+- `GET /health`
 
-```bash
-curl http://localhost:8000/health
-```
+### Auth proxy
+- `POST /login`
+- `POST /logout`
 
-### Auth
+### Trading signals proxy
+- `GET /signals/latest`
 
-```bash
-curl -X POST http://localhost:8000/login \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com"}'
-```
+### Room status + room actions
+- `POST /room/status`
+- `POST /room/{action_name}` where `action_name` is one of:
+  - `portfolios`
+  - `portfolio-create`
+  - `orders`
+  - `order-create`
+  - `order-close`
+  - `transactions`
+  - `transaction-close`
+  - `portfolio-close`
 
-```bash
-curl -X POST http://localhost:8000/logout \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","base_domain":"https://hivagold.com"}'
-```
-
-### Signals
-
-```bash
-curl http://localhost:8000/signals/latest
-```
-
-### Room Status
-
-```bash
-curl -X POST http://localhost:8000/room/status \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","base_domain":"https://hivagold.com","market":"xag"}'
-```
-
-### Room Generic Action APIs (`/room/{action_name}`)
-
-#### Portfolios
-
-```bash
-curl -X POST http://localhost:8000/room/portfolios \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com"}'
-```
-
-#### Create Portfolio
-
-```bash
-curl -X POST http://localhost:8000/room/portfolio-create \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","payload":{}}'
-```
-
-#### Orders
-
-```bash
-curl -X POST http://localhost:8000/room/orders \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","market":"xag"}'
-```
-
-#### Create Order
-
-```bash
-curl -X POST http://localhost:8000/room/order-create \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","payload":{"market":"xag","side":"buy","units":1,"order_type":"market"}}'
-```
-
-#### Close Order
-
-```bash
-curl -X POST http://localhost:8000/room/order-close \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","payload":{"order_id":12345}}'
-```
-
-#### Transactions
-
-```bash
-curl -X POST http://localhost:8000/room/transactions \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","market":"xag"}'
-```
-
-#### Close Transaction
-
-```bash
-curl -X POST http://localhost:8000/room/transaction-close \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","payload":{"transaction_id":12345}}'
-```
-
-#### Close Portfolio
-
-```bash
-curl -X POST http://localhost:8000/room/portfolio-close \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","payload":{"portfolio_id":12345}}'
-```
-
-### Portfolio APIs (proxied by API Server)
-
-#### Upsert strategy rule
-
-```bash
-curl -X POST http://localhost:8000/portfolio/rules \
-  -H "Content-Type: application/json" \
-  -d '{"strategy":"ema_wall_v1","symbol":"xag","enabled":true,"max_open_positions":1,"risk":0.01}'
-```
-
-#### Create manual portfolio order
-
-```bash
-curl -X POST http://localhost:8000/portfolio/orders \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","symbol":"xag","side":"buy","entry_price":32.1,"tp":33.1,"sl":31.6,"strategy":"manual"}'
-```
-
-#### Create bot portfolio order
-
-```bash
-curl -X POST http://localhost:8000/portfolio/orders/bot \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","symbol":"xag","side":"buy","entry_price":32.1,"strategy":"ema_wall_v1"}'
-```
-
-#### Price tick
-
-```bash
-curl -X POST http://localhost:8000/portfolio/price \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","symbol":"xag","price":32.4}'
-```
-
-#### User stats
-
-```bash
-curl http://localhost:8000/portfolio/users/09133040700/stats
-```
-
-#### DB records
-
-```bash
-curl http://localhost:8000/portfolio/db/records
-```
-
-#### Strategy PnL/positions
-
-```bash
-curl http://localhost:8000/portfolio/strategies/ema_wall_v1/pnl-positions
-```
-
-#### Admin DB snapshot
-
-```bash
-curl http://localhost:8000/admin/db/all -H "x-admin-key: change-me-admin"
-```
+### Portfolio/simulator proxy
+- `POST /portfolio/rules`
+- `POST /portfolio/orders`
+- `POST /portfolio/orders/bot`
+- `POST /portfolio/price`
+- `GET /portfolio/users/{user_id}/stats`
+- `GET /portfolio/db/records`
+- `GET /portfolio/strategies/{strategy}/pnl-positions`
+- `GET /admin/db/all` (requires header: `x-admin-key`)
 
 ---
 
-## 5) Worker-level APIs (direct access)
+## Worker endpoints (direct)
 
-### Bot Auth Worker (`http://localhost:8002`)
+### `bot_captcha_worker` (`:8001`)
+- `GET /health`
+- `POST /solve`
 
-```bash
-curl http://localhost:8002/health
-```
+### `bot_auth_worker` (`:8002`)
+- `GET /health`
+- `POST /login`
+- `POST /logout`
 
-```bash
-curl -X POST http://localhost:8002/login \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com"}'
-```
+### `bot_room_worker` (`:8005`)
+- `GET /health`
+- `POST /room/status`
+- `POST /room/portfolios`
+- `POST /room/portfolio/create`
+- `POST /room/orders`
+- `POST /room/order/create`
+- `POST /room/order/close`
+- `POST /room/transactions`
+- `POST /room/transaction/close`
+- `POST /room/portfolio/close`
 
-```bash
-curl -X POST http://localhost:8002/logout \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","base_domain":"https://hivagold.com"}'
-```
+### `bot_trading_worker` (`:8006`)
+- `GET /health`
+- `POST /trading/process` (`start|stop|status|list_bots|activate_bot|deactivate_bot`)
+- `GET /signals/latest`
+- `WS /signals/ws`
 
-### Bot Captcha Worker (`http://localhost:8001`)
+### `bot_simulator_worker` (`:8007`, requires `x-api-key` except health)
+- `GET /health`
+- `POST /portfolio/orders`
+- `PATCH /portfolio/users/{mobile}/positions/{position_id}`
+- `POST /portfolio/users/{mobile}/positions/{position_id}/close`
+- `POST /portfolio/price`
+- `GET /portfolio/users/{mobile}/stats`
+- `GET /portfolio/users/{mobile}/history`
+- `GET /portfolio/db/records`
+- `GET /portfolio/strategies/{strategy}/pnl-positions`
+- `GET /portfolio/admin/db`
 
-```bash
-curl http://localhost:8001/health
-```
+---
 
-```bash
-curl -X POST http://localhost:8001/solve \
-  -F "image=@captcha.jpg"
-```
-
-### Bot Room Worker (`http://localhost:8003`)
-
-```bash
-curl http://localhost:8003/health
-```
-
-```bash
-curl -X POST http://localhost:8003/room/status \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","base_domain":"https://hivagold.com","market":"xag"}'
-```
-
-```bash
-curl -X POST http://localhost:8003/room/orders \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","base_domain":"https://hivagold.com","market":"xag"}'
-```
-
-### Bot Trading Worker (`http://localhost:8004`)
+## Tests
 
 ```bash
-curl http://localhost:8004/health
+pytest -q
 ```
 
-```bash
-curl http://localhost:8004/signals/latest
-```
-
-```bash
-curl -X POST http://localhost:8004/trading/process \
-  -H "Content-Type: application/json" \
-  -d '{"action":"status","payload":{}}'
-```
-
-WebSocket stream:
-
-- `ws://localhost:8004/signals/ws`
-
-### Bot Simulator Worker (`http://localhost:8007`)
-
-All endpoints below require header `x-api-key`.
-
-```bash
-curl http://localhost:8007/health
-```
-
-```bash
-curl -X POST http://localhost:8007/portfolio/orders \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: change-me" \
-  -d '{"mobile":"09133040700","symbol":"xag","side":"buy","entry_price":32.1,"strategy":"ema_wall_v1"}'
-```
-
-```bash
-curl -X PATCH http://localhost:8007/portfolio/users/09133040700/positions/1 \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: change-me" \
-  -d '{"tp":33.2,"sl":31.5}'
-```
-
-```bash
-curl -X POST http://localhost:8007/portfolio/users/09133040700/positions/1/close \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: change-me" \
-  -d '{"close_price":32.8,"reason":"manual-close"}'
-```
-
-```bash
-curl -X POST http://localhost:8007/portfolio/price \
-  -H "Content-Type: application/json" \
-  -H "x-api-key: change-me" \
-  -d '{"mobile":"09133040700","symbol":"xag","price":32.5}'
-```
-
-```bash
-curl -H "x-api-key: change-me" http://localhost:8007/portfolio/users/09133040700/stats
-curl -H "x-api-key: change-me" http://localhost:8007/portfolio/users/09133040700/history
-curl -H "x-api-key: change-me" http://localhost:8007/portfolio/db/records
-curl -H "x-api-key: change-me" http://localhost:8007/portfolio/strategies/ema_wall_v1/pnl-positions
-curl -H "x-api-key: change-me" http://localhost:8007/portfolio/admin/db
-```
+Current tests are focused on API server behavior and trading/portfolio integration paths.
