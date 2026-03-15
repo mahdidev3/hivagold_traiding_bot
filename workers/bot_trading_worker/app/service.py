@@ -10,6 +10,7 @@ import requests
 
 from config import Config
 from .clients import BadRequestError, MarketDataClient, SessionStore, TradingExecutionClient, UserContext, cookie_header, normalize_base_url, normalize_domain, normalize_mobile, utc_now_ts
+from .modules import EmaWallStrategyModule, MarketSnapshot, StrategyAction, StrategyContext
 
 LIVE_SUB_MESSAGE = {"action": "SubAdd", "subs": ["0~hivagold~xag~gold"]}
 PRICE_PING_MESSAGE = {"type": "ping"}
@@ -22,6 +23,7 @@ class RuntimeState:
     latest_wall: Optional[dict[str, Any]] = None
     external_price: Optional[float] = None
     last_error: Optional[str] = None
+    open_orders: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -49,7 +51,7 @@ class TradingWorkerService:
         self._user_tasks: dict[str, asyncio.Task] = {}
         self._bot_configs: dict[str, BotThreadConfig] = {}
         self._latest_events: dict[str, dict[str, Any]] = {}
-        self._listeners: set[asyncio.Queue] = set()
+        self._strategies: dict[str, Any] = {EmaWallStrategyModule.name: EmaWallStrategyModule(config)}
 
     def _user_key(self, mobile: str, domain: str) -> str:
         return f"{normalize_domain(domain)}:{normalize_mobile(mobile)}"
@@ -114,17 +116,6 @@ class TradingWorkerService:
                 pass
         self._user_tasks.clear()
 
-    def register_listener(self) -> asyncio.Queue:
-        queue: asyncio.Queue = asyncio.Queue(maxsize=100)
-        self._listeners.add(queue)
-        return queue
-
-    def unregister_listener(self, queue: asyncio.Queue) -> None:
-        self._listeners.discard(queue)
-
-    def latest_signals(self) -> list[dict[str, Any]]:
-        return list(self._latest_events.values())
-
     async def process(self, args: Dict[str, Any]) -> Dict[str, Any]:
         action = args.get("action")
         if action == "start":
@@ -160,13 +151,6 @@ class TradingWorkerService:
     async def _publish_event(self, payload: dict[str, Any]) -> None:
         key = f"{payload.get('domain')}:{payload.get('mobile')}:{payload.get('event')}"
         self._latest_events[key] = payload
-        for queue in list(self._listeners):
-            try:
-                if queue.full():
-                    _ = queue.get_nowait()
-                queue.put_nowait(payload)
-            except Exception:
-                self._listeners.discard(queue)
 
     async def _run_bot(self, bot: BotThreadConfig) -> None:
         user = UserContext(mobile=bot.mobile, password=bot.password, domain=bot.domain)
@@ -223,6 +207,66 @@ class TradingWorkerService:
                     await task
                 except Exception:
                     pass
+
+
+    def _resolve_strategy(self, bot: BotThreadConfig):
+        return self._strategies.get(bot.strategy)
+
+    async def _apply_strategy(self, bot: BotThreadConfig, user: UserContext, session: requests.Session, state: RuntimeState) -> None:
+        strategy = self._resolve_strategy(bot)
+        if strategy is None:
+            return
+        if len(state.bars_by_ts) < 50 or state.latest_price is None:
+            return
+
+        bars = [state.bars_by_ts[k] for k in sorted(state.bars_by_ts.keys())[-200:]]
+        snapshot = MarketSnapshot(
+            now_ts=utc_now_ts(),
+            bars=bars,
+            latest_price=state.latest_price,
+            latest_wall=state.latest_wall,
+            last_error=state.last_error,
+        )
+        context = StrategyContext(
+            mobile=bot.mobile,
+            domain=bot.domain,
+            room=bot.room,
+            run_mode=bot.run_mode,
+            portfolio_id=str(bot.metadata.get("portfolio_id")) if bot.metadata.get("portfolio_id") is not None else None,
+            open_orders=state.open_orders,
+        )
+        actions = strategy.on_market_update(snapshot, context)
+        if not actions:
+            return
+        await self._publish_event(self._event(bot, "strategy_actions", {"count": len(actions), "strategy": strategy.name}))
+        await self._execute_actions(bot, user, session, actions, state)
+
+    async def _execute_actions(self, bot: BotThreadConfig, user: UserContext, session: requests.Session, actions: list[StrategyAction], state: RuntimeState) -> None:
+        for action in actions:
+            try:
+                result: dict[str, Any]
+                if action.operation == "create_order":
+                    payload = dict(action.payload)
+                    payload.setdefault("user_id", user.mobile)
+                    result = await asyncio.to_thread(self.execution_client.create_order, run_mode=bot.run_mode, session=session, domain=user.domain, payload=payload)
+                    state.open_orders.append(result.get("result") if isinstance(result.get("result"), dict) else payload)
+                elif action.operation == "update_order":
+                    order_id = action.payload.get("order_id")
+                    if order_id is None:
+                        continue
+                    payload = {k: v for k, v in action.payload.items() if k not in {"order_id", "mobile", "domain", "room", "strategy", "portfolio_id"}}
+                    result = await asyncio.to_thread(self.execution_client.update_order, run_mode=bot.run_mode, session=session, domain=user.domain, order_id=order_id, payload=payload)
+                elif action.operation == "close_order":
+                    order_id = action.payload.get("order_id")
+                    if order_id is None:
+                        continue
+                    result = await asyncio.to_thread(self.execution_client.close_order, run_mode=bot.run_mode, session=session, domain=user.domain, order_id=order_id, close_price=action.payload.get("close_price"), reason=action.reason)
+                    state.open_orders = [o for o in state.open_orders if (o.get("id") or o.get("position_id")) != order_id]
+                else:
+                    continue
+                await self._publish_event(self._event(bot, "strategy_order", {"operation": action.operation, "reason": action.reason, "result": result}))
+            except Exception as exc:
+                await self._publish_event(self._event(bot, "strategy_order_error", {"operation": action.operation, "error": str(exc)}))
 
     def _event(self, bot: BotThreadConfig, event: str, payload: dict[str, Any]) -> dict[str, Any]:
         return {"ts": utc_now_ts(), "mobile": bot.mobile, "domain": normalize_domain(bot.domain), "strategy": bot.strategy, "run_mode": bot.run_mode, "event": event, "payload": payload}
@@ -298,6 +342,8 @@ class TradingWorkerService:
                 await asyncio.to_thread(self.execution_client.price_tick, session=session, mobile=user.mobile, price=price, symbol=self.config.BARS_SYMBOL)
             except Exception as exc:
                 await self._publish_event(self._event(bot, "simulator_price_error", {"error": str(exc)}))
+
+        await self._apply_strategy(bot, user, session, state)
 
     async def _on_external_price_message(self, bot: BotThreadConfig, raw: str, state: RuntimeState) -> None:
         price = self._extract_price(raw)

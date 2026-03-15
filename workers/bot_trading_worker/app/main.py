@@ -1,14 +1,12 @@
 from contextlib import asynccontextmanager
-import asyncio
-import json
 from logging import Logger
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException
 
 from config import get_config
 from .clients import build_clients
 from .logging_setup import setup_logger
-from .schemas import HealthResponse, LatestSignalsResponse, ProcessTradingRequest, ProcessTradingResponse
+from .schemas import HealthResponse, ProcessTradingRequest, ProcessTradingResponse
 from .service import TradingWorkerService
 
 
@@ -55,36 +53,3 @@ async def process_request(payload: ProcessTradingRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@app.get("/signals/latest", response_model=LatestSignalsResponse)
-async def latest_signals():
-    return LatestSignalsResponse(success=True, signals=trading_service.latest_signals())
-
-
-@app.websocket("/signals/ws")
-async def signals_ws(websocket: WebSocket):
-    await websocket.accept()
-    queue = trading_service.register_listener()
-
-    for signal in trading_service.latest_signals():
-        await websocket.send_text(json.dumps(signal, ensure_ascii=False))
-
-    sender_task = asyncio.create_task(_ws_sender_loop(websocket, queue))
-
-    try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
-        pass
-    finally:
-        sender_task.cancel()
-        try:
-            await sender_task
-        except Exception:
-            pass
-        trading_service.unregister_listener(queue)
-
-
-async def _ws_sender_loop(websocket: WebSocket, queue: asyncio.Queue):
-    while True:
-        signal = await queue.get()
-        await websocket.send_text(json.dumps(signal, ensure_ascii=False))

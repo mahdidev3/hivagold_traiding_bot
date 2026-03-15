@@ -10,7 +10,7 @@ Monorepo for Hivagold trading automation services (FastAPI workers + gateway API
 | `bot_captcha_worker` | `8001` | Download and solve captcha images |
 | `bot_auth_worker` | `8002` | Login/logout flow and user session/header persistence |
 | `bot_room_worker` | `8005` | Portfolio/order/transaction actions against room APIs |
-| `bot_trading_worker` | `8006` | Bot runtime, market streams, event feed (`signals`) |
+| `bot_trading_worker` | `8006` | Bot runtime and per-user/per-room strategy execution |
 | `bot_simulator_worker` | `8007` | File-based portfolio simulator |
 
 ---
@@ -65,9 +65,6 @@ Gateway URL: `http://localhost:8000`
 - `POST /login`
 - `POST /logout`
 
-### Trading signals proxy
-- `GET /signals/latest`
-
 ### Room status + room actions
 - `POST /room/status`
 - `POST /room/{action_name}` where `action_name` is one of:
@@ -118,8 +115,6 @@ Gateway URL: `http://localhost:8000`
 ### `bot_trading_worker` (`:8006`)
 - `GET /health`
 - `POST /trading/process` (`start|stop|status|list_bots|activate_bot|deactivate_bot`)
-- `GET /signals/latest`
-- `WS /signals/ws`
 
 ### `bot_simulator_worker` (`:8007`, requires `x-api-key` except health)
 - `GET /health`

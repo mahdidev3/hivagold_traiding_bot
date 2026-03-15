@@ -32,9 +32,6 @@ def main():
     logout_parser.add_argument("--mobile", required=True)
     logout_parser.add_argument("--base-domain")
 
-    signals_parser = subparsers.add_parser("signals")
-    signals_parser.add_argument("--latest", action="store_true")
-
     room_status_parser = subparsers.add_parser("room-status")
     room_status_parser.add_argument("--mobile", required=True)
     room_status_parser.add_argument("--base-domain", default="https://hivagold.com")
@@ -82,11 +79,6 @@ def main():
         if args.base_domain:
             payload["base_domain"] = args.base_domain
         response = requests.post(f"{args.server}/logout", json=payload, timeout=30)
-        _print_response(response)
-        return
-
-    if args.command == "signals":
-        response = requests.get(f"{args.server}/signals/latest", timeout=30)
         _print_response(response)
         return
 

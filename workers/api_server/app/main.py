@@ -77,14 +77,6 @@ async def logout(payload: LogoutRequest):
         raise HTTPException(status_code=500, detail=str(exc))
 
 
-@app.get("/signals/latest", response_model=ApiActionResponse)
-async def signals_latest():
-    try:
-        logger.debug("Received signals_latest request")
-        result = await asyncio.to_thread(service.execute, "get_signals", {})
-        return ApiActionResponse(success=result.get("success", False), data=result)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.post("/room/status", response_model=RoomStatusResponse)

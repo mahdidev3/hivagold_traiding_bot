@@ -1,4 +1,4 @@
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -44,6 +44,3 @@ class BotEvent(BaseModel):
     event: str
     payload: Dict[str, Any] = Field(default_factory=dict)
 
-
-class LatestSignalsResponse(WorkerBaseResponse):
-    signals: List[BotEvent] = Field(default_factory=list)
