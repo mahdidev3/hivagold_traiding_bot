@@ -31,6 +31,7 @@ class Config:
     REDIS_LOGIN_DATA_TTL: int = int(
         os.getenv("REDIS_LOGIN_DATA_TTL", str(14 * 24 * 60 * 60))
     )  # 14 days
+    USERS_STORAGE_DIR: str = os.getenv("USERS_STORAGE_DIR", "../bot_auth_worker/Users")
 
 
 config = Config()

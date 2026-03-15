@@ -41,6 +41,7 @@ class Config:
 
     ENABLE_STRATEGY_EMA_WALL_V1: bool = os.getenv("ENABLE_STRATEGY_EMA_WALL_V1", "true").lower() == "true"
     REDIS_MARKET_EVENT_CHANNEL: str = os.getenv("REDIS_MARKET_EVENT_CHANNEL", "bot.market.events")
+    USERS_STORAGE_DIR: str = os.getenv("USERS_STORAGE_DIR", "../bot_auth_worker/Users")
 
 
 config = Config()
