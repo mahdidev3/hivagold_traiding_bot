@@ -4,10 +4,10 @@ import logging
 import ssl
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, Optional
 from urllib.parse import urlparse
 
-import redis
 import requests
 import websockets
 from websockets.exceptions import ConnectionClosed
@@ -108,18 +108,25 @@ def domain_candidates(domain: str) -> list[str]:
 
 
 class HivagoldRedisClient:
-    def __init__(self, redis_pool: redis.ConnectionPool):
-        self.redis_pool = redis_pool
+    def __init__(self, sessions_file: Path, events_file: Path):
+        self.sessions_file = sessions_file
+        self.events_file = events_file
         self.logger = logging.getLogger(__name__)
-        # Backward compatibility: existing service code accesses `.redis_client`.
-        # Keep a shared redis handle for pub/sub operations.
-        self.redis_client = self._redis_connection()
+        self.sessions_file.parent.mkdir(parents=True, exist_ok=True)
+        self.events_file.parent.mkdir(parents=True, exist_ok=True)
+        self.redis_client = self
 
-    def _redis_connection(self) -> redis.Redis:
-        return redis.Redis(connection_pool=self.redis_pool, decode_responses=True)
+    def _read_sessions(self) -> dict[str, Any]:
+        if not self.sessions_file.exists():
+            return {}
+        try:
+            data = json.loads(self.sessions_file.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
 
     def get_session_data(self, mobile: str, domain: str) -> Optional[Dict[str, Any]]:
-        conn = self._redis_connection()
+        data = self._read_sessions()
         normalized_mobile = normalize_mobile(mobile)
         mobile_candidates: list[str] = []
         for candidate in [normalized_mobile, (mobile or "").strip()]:
@@ -131,25 +138,25 @@ class HivagoldRedisClient:
             for mobile_candidate in mobile_candidates:
                 redis_key = f"{key_domain}:{mobile_candidate}"
                 attempted_keys.append(redis_key)
-                raw = conn.get(redis_key)
+                raw = data.get(redis_key)
                 if not raw:
                     continue
                 try:
-                    data = json.loads(raw)
+                    parsed = raw if isinstance(raw, dict) else json.loads(raw)
                 except json.JSONDecodeError:
                     self.logger.error(
-                        "Invalid JSON for redis session key=%s", redis_key
+                        "Invalid JSON for session key=%s", redis_key
                     )
                     continue
-                if isinstance(data, dict):
-                    return data
+                if isinstance(parsed, dict):
+                    return parsed
                 self.logger.warning(
-                    "Unexpected redis session payload type key=%s type=%s",
+                    "Unexpected session payload type key=%s type=%s",
                     redis_key,
-                    type(data).__name__,
+                    type(parsed).__name__,
                 )
         self.logger.debug(
-            "No redis session found domain=%s mobile=%s attempts=%s",
+            "No session found domain=%s mobile=%s attempts=%s",
             domain,
             normalized_mobile,
             len(attempted_keys),
@@ -157,8 +164,14 @@ class HivagoldRedisClient:
         return None
 
     def publish_event(self, channel: str, event: Dict[str, Any]) -> int:
-        payload = json.dumps(event, ensure_ascii=False)
-        return int(self.redis_client.publish(channel, payload))
+        record = {
+            "channel": channel,
+            "event": event,
+            "ts": utc_now_ts(),
+        }
+        with self.events_file.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        return 1
 
 
 class MarketDataClient:
@@ -342,15 +355,9 @@ class MarketDataClient:
 
 
 def build_clients(config: Config) -> tuple[HivagoldRedisClient, MarketDataClient]:
-    redis_password = config.REDIS_PASSWORD.strip() or None
-    redis_pool = redis.ConnectionPool(
-        host=config.REDIS_HOST,
-        port=config.REDIS_PORT,
-        db=config.REDIS_DB,
-        password=redis_password,
-        decode_responses=True,
-    )
-    return HivagoldRedisClient(redis_pool), MarketDataClient(config)
+    sessions_file = Path(getattr(config, "SESSION_CACHE_FILE", "data/auth_sessions.json"))
+    events_file = Path(getattr(config, "MARKET_EVENTS_FILE", "data/market_events.jsonl"))
+    return HivagoldRedisClient(sessions_file, events_file), MarketDataClient(config)
 
 
 def cookie_header(cookies: Dict[str, str]) -> str:

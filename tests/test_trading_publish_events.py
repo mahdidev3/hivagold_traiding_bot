@@ -19,7 +19,7 @@ class DummyMarket:
 class DummyConfig:
     USERS_JSON_PATH = "workers/bot_trading_worker/users.json"
     ROOM_PREFIX = "/xag"
-    REDIS_MARKET_EVENT_CHANNEL = "bot.market.events"
+    MARKET_EVENT_CHANNEL = "bot.market.events"
     BARS_SYMBOL = "xag"
 
 
@@ -34,7 +34,7 @@ async def _run_test_market_publish():
     await service._publish_market_event(DummyUser(), "price", {"price": 100})
     assert redis_client.calls
     channel, event = redis_client.calls[0]
-    assert channel == DummyConfig.REDIS_MARKET_EVENT_CHANNEL
+    assert channel == DummyConfig.MARKET_EVENT_CHANNEL
     assert event["event"] == "price"
 
 

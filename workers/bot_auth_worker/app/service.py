@@ -6,8 +6,8 @@ from config import Config
 
 from .clients import (
     CaptchaWorkerClient,
+    JsonSessionCacheClient,
     MainApiClient,
-    RedisClient,
     normalize_domain_key,
     normalize_mobile,
 )
@@ -22,7 +22,7 @@ class LoginWorkerService:
         self,
         api_client: MainApiClient,
         captcha_worker_client: CaptchaWorkerClient,
-        redis_client: RedisClient,
+        redis_client: JsonSessionCacheClient,
         config: Config,
         logger: logging.Logger,
     ):
@@ -125,7 +125,7 @@ class LoginWorkerService:
             normalized_mobile, normalized_base_domain
         )
         self.logger.debug(
-            "[login] redis lookup done found=%s keys=%s",
+            "[login] session cache lookup done found=%s keys=%s",
             bool(login_data),
             list(login_data.keys()) if login_data else [],
         )
@@ -215,7 +215,7 @@ class LoginWorkerService:
             )
 
             if login_response.status_code == 200:
-                self.logger.info("[login] login success, saving to redis")
+                self.logger.info("[login] login success, saving to JSON session cache")
                 session_data = {
                     "cookies": cookies,
                     "headers": headers or {},
@@ -224,7 +224,7 @@ class LoginWorkerService:
                     normalized_mobile,
                     session_data,
                     normalized_base_domain,
-                    self.config.REDIS_TTL,
+                    self.config.SESSION_CACHE_TTL,
                 )
                 self.logger.info("[login] saved login data, returning success")
                 return True, session_data
