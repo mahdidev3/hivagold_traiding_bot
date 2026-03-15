@@ -7,7 +7,8 @@ resources:
   - secret.yaml
   - bot-captcha-worker.yaml
   - bot-auth-worker.yaml
-  - bot-simulator-worker.yaml
+  - bot-room-worker.yaml
+  - bot-trading-worker.yaml
   - api-server.yaml
   - ingress.yaml
   - externalname-services.yaml
