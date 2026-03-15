@@ -17,6 +17,7 @@ def _svc():
 def test_create_update_delete_position_flow():
     svc = _svc()
 
+
     created = asyncio.run(
         svc.create_position(
             {
