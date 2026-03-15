@@ -1,39 +1,50 @@
 # Bot Trading Worker
 
-Trading runtime service for running strategy instances per active user-room portfolio.
+Trading runtime service that executes strategy loops per configured bot (user + domain + room).
 
 ## Responsibilities
 
 - Loads bot definitions from `users.json`.
-- Starts one runtime loop per active bot (one bot = one user + one room).
-- Opens market data streams (`live-bars`, `price`, `wall`) for each active bot.
-- Activates the configured strategy for that user-room and lets it manage order lifecycle.
-- Strategy is responsible for:
-  - creating orders,
-  - updating existing orders,
-  - closing orders,
-  - creating multiple orders on the same portfolio when needed.
-- Sends bot-mode orders to simulator when `run_mode=simulator`.
+- Starts one async runtime loop per active bot.
+- Maintains WS subscriptions (`live-bars`, `price`, `wall`, and optional external price WS).
+- Runs strategy modules (currently `ema_wall_v1`) and converts strategy actions into execution calls.
+- Sends execution to simulator when `run_mode=simulator` and to room APIs when `run_mode=real`.
 
 ## HTTP API
 
 - `GET /health`
 - `POST /trading/process`
-  - Supported actions: `start`, `stop`, `status`, `list_bots`, `activate_bot`, `deactivate_bot`
 
-## `POST /trading/process` payload shape
+### `POST /trading/process` actions
+
+Supported `action` values:
+
+- `start`
+- `stop`
+- `status`
+- `list_bots`
+- `activate_bot`
+- `deactivate_bot`
+
+### Request examples
+
+Start worker runtime:
+
+```json
+{ "action": "start" }
+```
+
+Activate existing bot by identity (mobile + domain):
 
 ```json
 {
   "action": "activate_bot",
   "mobile": "0912...",
-  "strategy": "ema_wall_v1",
-  "room": "xag",
-  "run_mode": "simulator"
+  "domain": "https://hivagold.com"
 }
 ```
 
-Deactivate by `bot_id` returned from activation:
+Deactivate by `bot_id`:
 
 ```json
 {
@@ -65,8 +76,8 @@ Deactivate by `bot_id` returned from activation:
 
 - `TRADING_WORKER_HOST`, `TRADING_WORKER_PORT`
 - `TRADING_USERS_JSON_PATH`
+- `TRADING_AUTO_START`
 - `WS_LIVE_BARS_PATH`, `WS_PRICE_PATH`, `WS_WALL_PATH`
 - `WS_EXTERNAL_PRICE_URL` (optional)
 - `BARS_API_PATH`, `BARS_POLL_INTERVAL_SECONDS`
-- `TRADING_AUTO_START`
 - `SIMULATOR_WORKER_URL`, `SIMULATOR_API_KEY`

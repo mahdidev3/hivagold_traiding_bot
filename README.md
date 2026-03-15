@@ -6,16 +6,16 @@ Monorepo for Hivagold trading automation services (FastAPI workers + gateway API
 
 | Service | Default Port | Responsibility |
 |---|---:|---|
-| `api_server` | `8000` | Public gateway that proxies auth/room/trading/simulator APIs |
-| `bot_captcha_worker` | `8001` | Download and solve captcha images |
-| `bot_auth_worker` | `8002` | Login/logout flow and user session/header persistence |
-| `bot_room_worker` | `8005` | Portfolio/order/transaction actions against room APIs |
-| `bot_trading_worker` | `8006` | Bot runtime and per-user/per-room strategy execution |
-| `bot_simulator_worker` | `8007` | File-based portfolio simulator |
+| `api_server` | `8000` | Public gateway that proxies auth, room, and simulator/portfolio APIs |
+| `bot_captcha_worker` | `8001` | Downloads captcha images and extracts captcha codes |
+| `bot_auth_worker` | `8002` | Login/logout flow and persisted session/cookie handling |
+| `bot_room_worker` | `8005` | Room operations (`status`, `portfolios`, `orders`, `transactions`) |
+| `bot_trading_worker` | `8006` | Multi-bot runtime (`start/stop/status`, activate/deactivate bot) |
+| `bot_simulator_worker` | `8007` | File-based portfolio simulator used by strategy and API flows |
 
 ---
 
-## Local development (single `.venv`)
+## Local development
 
 From repo root:
 
@@ -35,13 +35,13 @@ pip install pytest
 
 ## Run locally
 
-Start Redis (used by room/auth related flows):
+Start Redis (needed by auth/room flows):
 
 ```bash
 docker run --rm -p 6379:6379 --name hivagold-redis redis:7
 ```
 
-Run workers (one terminal each):
+Run workers (one terminal per service):
 
 ```bash
 cd workers/bot_captcha_worker && python run.py
@@ -56,7 +56,7 @@ Gateway URL: `http://localhost:8000`
 
 ---
 
-## API gateway endpoints (`api_server`)
+## API gateway (`workers/api_server`)
 
 ### Health
 - `GET /health`
@@ -65,9 +65,9 @@ Gateway URL: `http://localhost:8000`
 - `POST /login`
 - `POST /logout`
 
-### Room status + room actions
+### Room endpoints
 - `POST /room/status`
-- `POST /room/{action_name}` where `action_name` is one of:
+- `POST /room/{action_name}` where `action_name` is:
   - `portfolios`
   - `portfolio-create`
   - `orders`
@@ -77,7 +77,7 @@ Gateway URL: `http://localhost:8000`
   - `transaction-close`
   - `portfolio-close`
 
-### Portfolio/simulator proxy
+### Portfolio/simulator endpoints
 - `POST /portfolio/rules`
 - `POST /portfolio/orders`
 - `POST /portfolio/orders/bot`
@@ -85,7 +85,7 @@ Gateway URL: `http://localhost:8000`
 - `GET /portfolio/users/{user_id}/stats`
 - `GET /portfolio/db/records`
 - `GET /portfolio/strategies/{strategy}/pnl-positions`
-- `GET /admin/db/all` (requires header: `x-admin-key`)
+- `GET /admin/db/all` (requires header `x-admin-key`)
 
 ---
 
@@ -114,9 +114,12 @@ Gateway URL: `http://localhost:8000`
 
 ### `bot_trading_worker` (`:8006`)
 - `GET /health`
-- `POST /trading/process` (`start|stop|status|list_bots|activate_bot|deactivate_bot`)
+- `POST /trading/process`
+  - actions: `start`, `stop`, `status`, `list_bots`, `activate_bot`, `deactivate_bot`
 
-### `bot_simulator_worker` (`:8007`, requires `x-api-key` except health)
+### `bot_simulator_worker` (`:8007`)
+All endpoints except `/health` require `x-api-key: <BOT_API_KEY>`.
+
 - `GET /health`
 - `POST /portfolio/orders`
 - `PATCH /portfolio/users/{mobile}/positions/{position_id}`
@@ -135,5 +138,3 @@ Gateway URL: `http://localhost:8000`
 ```bash
 pytest -q
 ```
-
-Current tests are focused on API server behavior and trading/portfolio integration paths.
