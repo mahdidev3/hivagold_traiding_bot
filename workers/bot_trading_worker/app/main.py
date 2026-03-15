@@ -8,21 +8,17 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from config import get_config
 from .clients import build_clients
 from .logging_setup import setup_logger
-from .schemas import (
-    HealthResponse,
-    LatestSignalsResponse,
-    ProcessTradingRequest,
-    ProcessTradingResponse,
-)
+from .schemas import HealthResponse, LatestSignalsResponse, ProcessTradingRequest, ProcessTradingResponse
 from .service import TradingWorkerService
 
 
 config = get_config()
-
 logger: Logger = setup_logger(config)
 
-redis_client, market_client = build_clients(config)
-trading_service = TradingWorkerService(config, redis_client, market_client, logger)
+session_store, market_client, execution_client = build_clients(config)
+trading_service = TradingWorkerService(config, session_store, market_client, execution_client, logger)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Trading Worker started")
@@ -44,17 +40,12 @@ def _http_from_result(result: dict):
 
 @app.get("/health", response_model=HealthResponse)
 async def health():
-    return HealthResponse(
-        status="healthy",
-        app_name=config.APP_NAME,
-        version=config.APP_VERSION,
-    )
+    return HealthResponse(status="healthy", app_name=config.APP_NAME, version=config.APP_VERSION)
 
 
 @app.post("/trading/process", response_model=ProcessTradingResponse)
 async def process_request(payload: ProcessTradingRequest):
     try:
-        logger.debug("Received process trading request")
         result = await trading_service.process(payload.model_dump())
         return _http_from_result(result)
     except HTTPException:
