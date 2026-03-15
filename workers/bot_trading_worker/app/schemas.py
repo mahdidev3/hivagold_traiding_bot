@@ -24,6 +24,7 @@ class ProcessTradingRequest(BaseModel):
     action: Literal["start", "stop", "status", "list_bots", "activate_bot", "deactivate_bot"]
     mobile: Optional[str] = None
     domain: Optional[str] = None
+    bot_id: Optional[str] = None
 
 
 class WorkerBaseResponse(BaseModel):

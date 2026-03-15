@@ -3,6 +3,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 from pathlib import Path
+from uuid import uuid4
 from typing import Any, Dict, Optional
 from urllib.parse import urlparse
 
@@ -51,6 +52,8 @@ class TradingWorkerService:
         self._user_tasks: dict[str, asyncio.Task] = {}
         self._bot_configs: dict[str, BotThreadConfig] = {}
         self._latest_events: dict[str, dict[str, Any]] = {}
+        self._active_bot_ids: dict[str, str] = {}
+        self._bot_keys_by_id: dict[str, str] = {}
         self._strategies: dict[str, Any] = {EmaWallStrategyModule.name: EmaWallStrategyModule(config)}
 
     def _user_key(self, mobile: str, domain: str) -> str:
@@ -94,7 +97,7 @@ class TradingWorkerService:
             key = self._user_key(bot.mobile, bot.domain)
             self._bot_configs[key] = bot
             if bot.active:
-                self._user_tasks[key] = asyncio.create_task(self._run_bot(bot), name=key)
+                self._ensure_bot_active(key, bot)
         return {"started": True, "bots": len(self._user_tasks)}
 
     async def stop(self) -> dict[str, Any]:
@@ -115,6 +118,8 @@ class TradingWorkerService:
             except Exception:
                 pass
         self._user_tasks.clear()
+        self._active_bot_ids.clear()
+        self._bot_keys_by_id.clear()
 
     async def process(self, args: Dict[str, Any]) -> Dict[str, Any]:
         action = args.get("action")
@@ -123,7 +128,7 @@ class TradingWorkerService:
         if action == "stop":
             return {"success": True, "result": await self.stop()}
         if action == "status":
-            return {"success": True, "result": {"running": self._running, "active_bots": len(self._user_tasks), "configured_bots": len(self._bot_configs)}}
+            return {"success": True, "result": {"running": self._running, "active_bots": [self._active_bot_info(key) for key in self._user_tasks], "configured_bots": len(self._bot_configs)}}
         if action == "list_bots":
             return {"success": True, "result": {"bots": [self._bot_to_dict(cfg) for cfg in self._bot_configs.values()]}}
         if action == "activate_bot":
@@ -133,20 +138,67 @@ class TradingWorkerService:
         return {"success": False, "error": f"Unknown action: {action}"}
 
     async def _toggle_bot(self, args: Dict[str, Any], activate: bool) -> Dict[str, Any]:
-        key = self._user_key(args.get("mobile", ""), args.get("domain", ""))
+        key = self._resolve_bot_key(args)
+        if not key:
+            return {"success": False, "error": "Bot not found"}
         bot = self._bot_configs.get(key)
         if not bot:
             return {"success": False, "error": "Bot not found"}
+
         bot.active = activate
-        if activate and key not in self._user_tasks:
+        if activate:
+            bot_id = self._ensure_bot_active(key, bot)
+        else:
+            bot_id = self._active_bot_ids.get(key)
+            task = self._user_tasks.pop(key, None)
+            if task:
+                task.cancel()
+            self._drop_bot_id(key)
+
+        return {"success": True, "result": {"bot_id": bot_id, "mobile": bot.mobile, "domain": bot.domain, "strategy": bot.strategy, "active": bot.active}}
+
+    def _resolve_bot_key(self, args: Dict[str, Any]) -> Optional[str]:
+        bot_id = str(args.get("bot_id", "")).strip()
+        if bot_id:
+            return self._bot_keys_by_id.get(bot_id)
+        mobile = str(args.get("mobile", "")).strip()
+        domain = str(args.get("domain", "")).strip()
+        if mobile and domain:
+            return self._user_key(mobile, domain)
+        return None
+
+    def _ensure_bot_active(self, key: str, bot: BotThreadConfig) -> str:
+        if key not in self._user_tasks:
             self._user_tasks[key] = asyncio.create_task(self._run_bot(bot), name=key)
-        if not activate and key in self._user_tasks:
-            task = self._user_tasks.pop(key)
-            task.cancel()
-        return {"success": True, "result": {"mobile": bot.mobile, "domain": bot.domain, "active": bot.active}}
+        bot_id = self._active_bot_ids.get(key)
+        if bot_id:
+            return bot_id
+        bot_id = f"bot-{uuid4().hex[:12]}"
+        self._active_bot_ids[key] = bot_id
+        self._bot_keys_by_id[bot_id] = key
+        return bot_id
+
+    def _drop_bot_id(self, key: str) -> None:
+        bot_id = self._active_bot_ids.pop(key, None)
+        if bot_id:
+            self._bot_keys_by_id.pop(bot_id, None)
+
+    def _active_bot_info(self, key: str) -> dict[str, Any]:
+        bot = self._bot_configs.get(key)
+        if not bot:
+            return {"bot_id": self._active_bot_ids.get(key), "key": key}
+        return {
+            "bot_id": self._active_bot_ids.get(key),
+            "mobile": bot.mobile,
+            "domain": bot.domain,
+            "strategy": bot.strategy,
+            "room": bot.room,
+            "run_mode": bot.run_mode,
+        }
 
     def _bot_to_dict(self, bot: BotThreadConfig) -> dict[str, Any]:
-        return {"mobile": bot.mobile, "domain": bot.domain, "strategy": bot.strategy, "room": bot.room, "run_mode": bot.run_mode, "active": bot.active, "metadata": bot.metadata}
+        key = self._user_key(bot.mobile, bot.domain)
+        return {"bot_id": self._active_bot_ids.get(key), "mobile": bot.mobile, "domain": bot.domain, "strategy": bot.strategy, "room": bot.room, "run_mode": bot.run_mode, "active": bot.active, "metadata": bot.metadata}
 
     async def _publish_event(self, payload: dict[str, Any]) -> None:
         key = f"{payload.get('domain')}:{payload.get('mobile')}:{payload.get('event')}"

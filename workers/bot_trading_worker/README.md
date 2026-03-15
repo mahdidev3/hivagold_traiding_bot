@@ -33,6 +33,15 @@ Trading runtime service for running strategy instances per active user-room port
 }
 ```
 
+Deactivate by `bot_id` returned from activation:
+
+```json
+{
+  "action": "deactivate_bot",
+  "bot_id": "bot-123456789abc"
+}
+```
+
 ## Bot config (`users.json`)
 
 ```json
