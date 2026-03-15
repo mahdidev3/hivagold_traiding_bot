@@ -1,6 +1,7 @@
 import os
 from dataclasses import dataclass
 from urllib.parse import urljoin
+from dotenv import load_dotenv
 
 
 @dataclass
