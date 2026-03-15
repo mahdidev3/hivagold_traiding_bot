@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 import logging
 from typing import Any
-from urllib.parse import urljoin
 
 import requests
 
@@ -36,22 +35,11 @@ class WorkerHttpClient:
         response.raise_for_status()
         return response.json()
 
-    def get_absolute(self, url: str) -> dict[str, Any]:
-        response = requests.get(url, timeout=self.timeout)
-        response.raise_for_status()
-        return response.json()
 
-
-def build_market_status_url(base_domain: str, market: str) -> str:
-    normalized_base = base_domain.rstrip("/") + "/"
-    return urljoin(normalized_base, f"{market}/api/status/")
-
-
-def build_clients(config: Config, logger: logging.Logger) -> tuple[WorkerHttpClient, WorkerHttpClient, WorkerHttpClient, WorkerHttpClient]:
+def build_clients(config: Config, logger: logging.Logger) -> tuple[WorkerHttpClient, WorkerHttpClient, WorkerHttpClient]:
     timeout = max(1, int(config.HTTP_TIMEOUT_SECONDS))
     return (
         WorkerHttpClient(config.AUTH_WORKER_URL, timeout, logger),
-        WorkerHttpClient(config.ROOM_WORKER_URL, timeout, logger),
         WorkerHttpClient(config.TRADING_WORKER_URL, timeout, logger),
         WorkerHttpClient(
             config.PORTFOLIO_WORKER_URL,

@@ -44,5 +44,13 @@ class PriceTickRequest(BaseModel):
     symbol: Optional[str] = None
 
 
+class StrategyTaskRequest(BaseModel):
+    mobile: str
+    domain: Optional[str] = None
+    room: str = "xag"
+    strategy: str = "helper-candle-break-v1"
+    simulation: bool = True
+
+
 class GenericResultResponse(WorkerBaseResponse):
     result: dict[str, Any] = Field(default_factory=dict)
