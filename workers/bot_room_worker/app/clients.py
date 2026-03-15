@@ -145,14 +145,14 @@ class PortfolioClient:
     """
     HTTP client for communicating with portfolio service.
     Handles portfolio creation, management, and balance operations.
-    Manages cookies from Redis and updates them after each request.
+    Manages cookies from session store and updates them after each request.
     """
 
     def __init__(
-        self, redis_client: UserSessionStore, config: Config, logger: logging.Logger
+        self, session_store: UserSessionStore, config: Config, logger: logging.Logger
     ):
         self.logger = logger
-        self.redis_client = redis_client
+        self.session_store = session_store
         self.config = config
 
     def _update_cookies_from_response(
@@ -212,7 +212,7 @@ class PortfolioClient:
         Args:
             get_url: URL endpoint to retrieve portfolios
             mobile: User mobile number
-            base_domain: Base domain for Redis key
+            base_domain: Base domain for session key
             cookies: Optional cookies for the request
             headers: Optional headers for the request
 
@@ -240,13 +240,13 @@ class PortfolioClient:
             # Update cookies from response
             self._update_cookies_from_response(response, cookies, headers)
 
-            # Save updated session data to Redis
+            # Save updated session data to file-backed session store
             if mobile and cookies:
                 session_data = {"cookies": cookies}
                 if headers:
                     session_data["headers"] = headers
-                self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                self.session_store.save_session_data(
+                    mobile, session_data, base_domain, self.config.SESSION_DATA_TTL
                 )
 
             return self._parse_response_json(response)
@@ -272,7 +272,7 @@ class PortfolioClient:
             portfolio_type: Portfolio type (e.g. isolated)
             initial_balance: Initial portfolio balance
             mobile: User mobile number
-            base_domain: Base domain for Redis key
+            base_domain: Base domain for session key
             cookies: Optional cookies for the request
             headers: Optional headers for the request
 
@@ -306,13 +306,13 @@ class PortfolioClient:
             # Update cookies from response
             self._update_cookies_from_response(response, cookies, headers)
 
-            # Save updated session data to Redis
+            # Save updated session data to file-backed session store
             if mobile and cookies:
                 session_data = {"cookies": cookies}
                 if headers:
                     session_data["headers"] = headers
-                self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                self.session_store.save_session_data(
+                    mobile, session_data, base_domain, self.config.SESSION_DATA_TTL
                 )
 
             return self._parse_response_json(response)
@@ -334,7 +334,7 @@ class PortfolioClient:
         Args:
             get_url: URL endpoint to retrieve transactions
             mobile: User mobile number
-            base_domain: Base domain for Redis key
+            base_domain: Base domain for session key
             cookies: Optional cookies for the request
             headers: Optional headers for the request
 
@@ -362,13 +362,13 @@ class PortfolioClient:
             # Update cookies from response
             self._update_cookies_from_response(response, cookies, headers)
 
-            # Save updated session data to Redis
+            # Save updated session data to file-backed session store
             if mobile and cookies:
                 session_data = {"cookies": cookies}
                 if headers:
                     session_data["headers"] = headers
-                self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                self.session_store.save_session_data(
+                    mobile, session_data, base_domain, self.config.SESSION_DATA_TTL
                 )
 
             return self._parse_response_json(response)
@@ -392,7 +392,7 @@ class PortfolioClient:
             close_url: Base URL endpoint to close transaction (transaction_id will be appended)
             transaction_id: ID of the transaction to close
             mobile: User mobile number
-            base_domain: Base domain for Redis key
+            base_domain: Base domain for session key
             cookies: Optional cookies for the request
             headers: Optional headers for the request
 
@@ -423,8 +423,8 @@ class PortfolioClient:
                 session_data = {"cookies": cookies}
                 if headers:
                     session_data["headers"] = headers
-                self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                self.session_store.save_session_data(
+                    mobile, session_data, base_domain, self.config.SESSION_DATA_TTL
                 )
 
             return self._parse_response_json(response)
@@ -448,7 +448,7 @@ class PortfolioClient:
             close_url: URL endpoint to close a portfolio
             portfolio_id: ID of the portfolio to close
             mobile: User mobile number
-            base_domain: Base domain for Redis key
+            base_domain: Base domain for session key
             cookies: Optional cookies for the request
             headers: Optional headers for the request
 
@@ -476,13 +476,13 @@ class PortfolioClient:
             # Update cookies from response
             self._update_cookies_from_response(response, cookies, headers)
 
-            # Save updated session data to Redis
+            # Save updated session data to file-backed session store
             if mobile and cookies:
                 session_data = {"cookies": cookies}
                 if headers:
                     session_data["headers"] = headers
-                self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                self.session_store.save_session_data(
+                    mobile, session_data, base_domain, self.config.SESSION_DATA_TTL
                 )
 
             return self._parse_response_json(response)
@@ -508,7 +508,7 @@ class PortfolioClient:
             portfolio_id: ID of the portfolio
             amount: Amount to increase the balance by
             mobile: User mobile number
-            base_domain: Base domain for Redis key
+            base_domain: Base domain for session key
             cookies: Optional cookies for the request
             headers: Optional headers for the request
 
@@ -539,13 +539,13 @@ class PortfolioClient:
             # Update cookies from response
             self._update_cookies_from_response(response, cookies, headers)
 
-            # Save updated session data to Redis
+            # Save updated session data to file-backed session store
             if mobile and cookies:
                 session_data = {"cookies": cookies}
                 if headers:
                     session_data["headers"] = headers
-                self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                self.session_store.save_session_data(
+                    mobile, session_data, base_domain, self.config.SESSION_DATA_TTL
                 )
 
             return self._parse_response_json(response)
@@ -558,14 +558,14 @@ class OrdersClient:
     """
     HTTP client for communicating with orders service.
     Handles order creation, retrieval, and closure operations.
-    Manages cookies from Redis and updates them after each request.
+    Manages cookies from session store and updates them after each request.
     """
 
     def __init__(
-        self, redis_client: UserSessionStore, config: Config, logger: logging.Logger
+        self, session_store: UserSessionStore, config: Config, logger: logging.Logger
     ):
         self.logger = logger
-        self.redis_client = redis_client
+        self.session_store = session_store
         self.config = config
 
     def _update_cookies_from_response(
@@ -634,7 +634,7 @@ class OrdersClient:
             action: Action for the order (e.g., buy, sell)
             units: Number of units for the order
             mobile: User mobile number
-            base_domain: Base domain for Redis key
+            base_domain: Base domain for session key
             price: Price for limit orders (required if order_type is "limit")
             stop_loss: Optional stop loss price
             take_profit: Optional take profit price
@@ -687,13 +687,13 @@ class OrdersClient:
             # Update cookies from response
             self._update_cookies_from_response(response, cookies, headers)
 
-            # Save updated session data to Redis
+            # Save updated session data to file-backed session store
             if mobile and cookies:
                 session_data = {"cookies": cookies}
                 if headers:
                     session_data["headers"] = headers
-                self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                self.session_store.save_session_data(
+                    mobile, session_data, base_domain, self.config.SESSION_DATA_TTL
                 )
 
             return self._parse_response_json(response)
@@ -715,7 +715,7 @@ class OrdersClient:
         Args:
             get_url: URL endpoint to retrieve active orders
             mobile: User mobile number
-            base_domain: Base domain for Redis key
+            base_domain: Base domain for session key
             cookies: Optional cookies for the request
             headers: Optional headers for the request
 
@@ -743,13 +743,13 @@ class OrdersClient:
             # Update cookies from response
             self._update_cookies_from_response(response, cookies, headers)
 
-            # Save updated session data to Redis
+            # Save updated session data to file-backed session store
             if mobile and cookies:
                 session_data = {"cookies": cookies}
                 if headers:
                     session_data["headers"] = headers
-                self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                self.session_store.save_session_data(
+                    mobile, session_data, base_domain, self.config.SESSION_DATA_TTL
                 )
 
             return self._parse_response_json(response)
@@ -773,7 +773,7 @@ class OrdersClient:
             close_url: URL endpoint to close an order (order_id will be appended to this URL)
             order_id: ID of the order to close
             mobile: User mobile number
-            base_domain: Base domain for Redis key
+            base_domain: Base domain for session key
             cookies: Optional cookies for the request
             headers: Optional headers for the request
 
@@ -804,13 +804,13 @@ class OrdersClient:
             # Update cookies from response
             self._update_cookies_from_response(response, cookies, headers)
 
-            # Save updated session data to Redis
+            # Save updated session data to file-backed session store
             if mobile and cookies:
                 session_data = {"cookies": cookies}
                 if headers:
                     session_data["headers"] = headers
-                self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                self.session_store.save_session_data(
+                    mobile, session_data, base_domain, self.config.SESSION_DATA_TTL
                 )
 
             return self._parse_response_json(response)
@@ -830,10 +830,10 @@ def build_clients(
         config: Configuration object containing client settings
 
     Returns:
-        Tuple containing (redis_client, portfolio_client, orders_client)
+        Tuple containing (session_store, portfolio_client, orders_client)
     """
-    redis_client = UserSessionStore(config.USERS_STORAGE_DIR, logger)
-    portfolio_client = PortfolioClient(redis_client, config, logger)
-    orders_client = OrdersClient(redis_client, config, logger)
+    session_store = UserSessionStore(config.USERS_STORAGE_DIR, logger)
+    portfolio_client = PortfolioClient(session_store, config, logger)
+    orders_client = OrdersClient(session_store, config, logger)
 
-    return redis_client, portfolio_client, orders_client
+    return session_store, portfolio_client, orders_client

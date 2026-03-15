@@ -35,11 +35,11 @@ class BaseRoomService:
     def __init__(
         self,
         config: Config,
-        redis_client: UserSessionStore,
+        session_store: UserSessionStore,
         logger: logging.Logger,
     ):
         self.config = config
-        self.redis_client = redis_client
+        self.session_store = session_store
         self.logger = logger
 
     def _resolve_room_prefix(self, room_prefix: Optional[str]) -> str:
@@ -56,7 +56,7 @@ class BaseRoomService:
             return None, None, None, "Mobile is required"
 
         resolved_base_domain = _normalize_base_domain(base_domain, self.config)
-        session_data = self.redis_client.get_session_data(
+        session_data = self.session_store.get_session_data(
             normalized_mobile, resolved_base_domain
         )
         if not session_data:
@@ -142,10 +142,10 @@ class GetPortfoliosService(BaseRoomService):
         self,
         config: Config,
         portfolio_client: PortfolioClient,
-        redis_client: UserSessionStore,
+        session_store: UserSessionStore,
         logger: logging.Logger,
     ):
-        super().__init__(config, redis_client, logger)
+        super().__init__(config, session_store, logger)
         self.portfolio_client = portfolio_client
 
     async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -178,10 +178,10 @@ class CreateActivePortfolioService(BaseRoomService):
         self,
         config: Config,
         portfolio_client: PortfolioClient,
-        redis_client: UserSessionStore,
+        session_store: UserSessionStore,
         logger: logging.Logger,
     ):
-        super().__init__(config, redis_client, logger)
+        super().__init__(config, session_store, logger)
         self.portfolio_client = portfolio_client
 
     async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -226,10 +226,10 @@ class GetOrdersService(BaseRoomService):
         self,
         config: Config,
         orders_client: OrdersClient,
-        redis_client: UserSessionStore,
+        session_store: UserSessionStore,
         logger: logging.Logger,
     ):
-        super().__init__(config, redis_client, logger)
+        super().__init__(config, session_store, logger)
         self.orders_client = orders_client
 
     async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -262,10 +262,10 @@ class CreateOrderService(BaseRoomService):
         self,
         config: Config,
         orders_client: OrdersClient,
-        redis_client: UserSessionStore,
+        session_store: UserSessionStore,
         logger: logging.Logger,
     ):
-        super().__init__(config, redis_client, logger)
+        super().__init__(config, session_store, logger)
         self.orders_client = orders_client
 
     async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -328,10 +328,10 @@ class CloseOrderService(BaseRoomService):
         self,
         config: Config,
         orders_client: OrdersClient,
-        redis_client: UserSessionStore,
+        session_store: UserSessionStore,
         logger: logging.Logger,
     ):
-        super().__init__(config, redis_client, logger)
+        super().__init__(config, session_store, logger)
         self.orders_client = orders_client
 
     async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -373,10 +373,10 @@ class GetTransactionsService(BaseRoomService):
         self,
         config: Config,
         portfolio_client: PortfolioClient,
-        redis_client: UserSessionStore,
+        session_store: UserSessionStore,
         logger: logging.Logger,
     ):
-        super().__init__(config, redis_client, logger)
+        super().__init__(config, session_store, logger)
         self.portfolio_client = portfolio_client
 
     async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -409,10 +409,10 @@ class CloseTransactionService(BaseRoomService):
         self,
         config: Config,
         portfolio_client: PortfolioClient,
-        redis_client: UserSessionStore,
+        session_store: UserSessionStore,
         logger: logging.Logger,
     ):
-        super().__init__(config, redis_client, logger)
+        super().__init__(config, session_store, logger)
         self.portfolio_client = portfolio_client
 
     async def execute(self, args: Dict[str, Any]) -> Dict[str, Any]:
@@ -455,10 +455,10 @@ class ClosePortfolioService(BaseRoomService):
         config: Config,
         portfolio_client: PortfolioClient,
         orders_client: OrdersClient,
-        redis_client: UserSessionStore,
+        session_store: UserSessionStore,
         logger: logging.Logger,
     ):
-        super().__init__(config, redis_client, logger)
+        super().__init__(config, session_store, logger)
         self.portfolio_client = portfolio_client
         self.orders_client = orders_client
 
