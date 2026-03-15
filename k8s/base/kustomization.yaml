@@ -4,7 +4,6 @@ namespace: hivagold
 resources:
   - namespace.yaml
   - configmap.yaml
-  - secret.yaml
   - bot-captcha-worker.yaml
   - bot-auth-worker.yaml
   - bot-room-worker.yaml

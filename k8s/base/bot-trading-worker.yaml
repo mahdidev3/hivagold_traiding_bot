@@ -28,11 +28,6 @@ spec:
               value: 0.0.0.0
             - name: TRADING_WORKER_PORT
               value: "8006"
-            - name: REDIS_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: hivagold-secrets
-                  key: REDIS_PASSWORD
           readinessProbe:
             httpGet:
               path: /health
