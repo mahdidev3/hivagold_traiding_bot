@@ -1,62 +1,22 @@
-# Hivagold Trading Bot (Microservices)
+# Hivagold Trading Bot — Local Mode Guide
 
-This repository contains a Python/FastAPI-based microservice system for Hivagold automation:
-
-- **API Server**: single public entrypoint for auth/room/signal APIs.
-- **Bot Auth Worker**: login/logout + captcha/auth cookie flow.
-- **Bot Captcha Worker**: captcha solving service.
-- **Bot Room Worker**: room/portfolio/order/transaction operations.
-- **Bot Trading Worker**: websocket-driven market state + modular strategy signals.
-- **Bot Simulator Worker**: strategy tester that consumes Redis events and tracks strategy PnL/win-rate history.
-- **Redis Worker**: shared state/cache + event bus.
+This README is focused on **running everything locally with Python** and using **one shared `.venv`** for the whole project.
 
 ---
 
-## Project Structure
+## 1) Create one `.venv` for the whole project
 
-```text
-workers/
-  api_server/
-  bot_auth_worker/
-  bot_captcha_worker/
-  bot_room_worker/
-  bot_trading_worker/
-  bot_simulator_worker/
-  redis_worker/
-tests/
-```
-
----
-
-## Service Responsibilities
-
-- **api_server**: public HTTP API, request validation, and stateless request dispatch to workers.
-- **bot_auth_worker**: login/logout session handling and captcha verification flow.
-- **bot_room_worker**: portfolio/order/transaction management endpoints against Hivagold room APIs.
-- **bot_trading_worker**: keeps existing `price`/`live-bars`/`wall` websocket streams, runs enabled strategy modules, publishes signals + market events.
-- **bot_captcha_worker**: dedicated captcha solving endpoint used by auth flow.
-- **bot_simulator_worker**: strategy tester (per-strategy virtual portfolio) that consumes Redis events, stores position symbol, and updates only matching-symbol positions for each price tick.
-- **redis_worker**: shared cache/session store and worker-to-worker event channel.
-
----
-
-## Prerequisites
-
-- Python **3.11+**
-- Docker + Docker Compose
-- kubectl (for Kubernetes deployments)
-- (Minikube only) minikube + ingress addon
-- (Optional) PowerShell for `manage.ps1` helper scripts
-
----
-
-## 1) Local Python setup
-
-From repo root:
+From repository root:
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate  # Linux/macOS
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+```
+
+Install all worker dependencies into the same environment:
+
+```bash
 pip install -r workers/api_server/requirements.txt
 pip install -r workers/bot_auth_worker/requirements.txt
 pip install -r workers/bot_captcha_worker/requirements.txt
@@ -66,325 +26,327 @@ pip install -r workers/bot_simulator_worker/requirements.txt
 pip install pytest
 ```
 
-Run tests:
-
-```bash
-pytest -q
-```
+> You only need this one `.venv` at repo root. Do **not** create separate virtual environments inside each worker.
 
 ---
 
-## 2) Run services locally (without Docker)
+## 2) Run in local mode (Python only)
 
-Use one terminal per service.
+Start Redis (required by workers):
 
 ```bash
-# terminal 1 (redis required)
 docker run --rm -p 6379:6379 --name hivagold-redis redis:7
+```
 
-# terminal 2
+Then open one terminal per service (with `.venv` activated):
+
+```bash
+# terminal 1
 cd workers/bot_captcha_worker && python run.py
 
-# terminal 3
+# terminal 2
 cd workers/bot_auth_worker && python run.py
 
-# terminal 4
+# terminal 3
 cd workers/bot_room_worker && python run.py
 
-# terminal 5
+# terminal 4
 cd workers/bot_trading_worker && python run.py
 
-# terminal 6
+# terminal 5
 cd workers/bot_simulator_worker && python run.py
 
-# terminal 7
+# terminal 6
 cd workers/api_server && python run.py
 ```
 
-> For Docker deployments, set `REDIS_HOST=redis` (service DNS on bridge network), not localhost.
+API Server will be available at:
+
+- `http://localhost:8000`
 
 ---
 
-## 3) Docker Compose commands per service
+## 3) Test credentials used in examples
 
-Each worker folder has its own `docker-compose.yaml`.
+All request examples below use:
 
-### Redis
-
-```bash
-cd workers/redis_worker
-docker compose up -d
-docker compose logs -f redis
-docker compose down
-```
-
-### Captcha worker
-
-```bash
-cd workers/bot_captcha_worker
-docker compose up -d
-docker compose logs -f captcha-worker
-docker compose down
-```
-
-### Auth worker
-
-```bash
-cd workers/bot_auth_worker
-docker compose up -d
-docker compose logs -f auth-worker
-docker compose down
-```
-
-### Room worker
-
-```bash
-cd workers/bot_room_worker
-docker compose up -d
-docker compose logs -f room-worker
-docker compose down
-```
-
-### Trading worker
-
-```bash
-cd workers/bot_trading_worker
-docker compose up -d
-docker compose logs -f trading-worker
-docker compose down
-```
-
-### Portfolio worker
-
-```bash
-cd workers/bot_simulator_worker
-docker compose up -d
-docker compose logs -f bot-simulator-worker
-docker compose down
-```
-
-### API server
-
-```bash
-cd workers/api_server
-docker compose up -d
-docker compose logs -f api-server
-docker compose down
-```
+- **mobile:** `09133040700`
+- **password:** `AMIR@700`
+- **base_domain:** `https://demo.hivagold.com`
 
 ---
 
-## 4) PowerShell helper commands
+## 4) API Server APIs (`http://localhost:8000`)
 
-Every worker folder provides `manage.ps1` with actions:
-
-- `build`
-- `up`
-- `down`
-- `restart`
-- `logs`
-- `all`
-- `volumes`
-- `volumes-rm`
-- `volume-rm -VolumeName <name>`
-
-Example:
-
-```powershell
-cd workers/bot_auth_worker
-./manage.ps1 -Action up
-./manage.ps1 -Action logs
-```
-
----
-
-## 5) API usage commands
-
-After API server is up (`http://localhost:8000` by default):
-
-Health:
+### Health
 
 ```bash
 curl http://localhost:8000/health
 ```
 
-Login:
+### Auth
 
 ```bash
 curl -X POST http://localhost:8000/login \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"0912xxxxxxx","password":"your-password","base_domain":"https://demo.hivagold.com"}'
+  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com"}'
 ```
-
-Logout:
 
 ```bash
 curl -X POST http://localhost:8000/logout \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com"}'
+  -d '{"mobile":"09133040700","base_domain":"https://demo.hivagold.com"}'
 ```
 
-Latest signals:
+### Signals
 
 ```bash
 curl http://localhost:8000/signals/latest
 ```
 
-Portfolio DB records (via api-server):
+### Room Status
+
+```bash
+curl -X POST http://localhost:8000/room/status \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","base_domain":"https://demo.hivagold.com","market":"xag"}'
+```
+
+### Room Generic Action APIs (`/room/{action_name}`)
+
+#### Portfolios
+
+```bash
+curl -X POST http://localhost:8000/room/portfolios \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com"}'
+```
+
+#### Create Portfolio
+
+```bash
+curl -X POST http://localhost:8000/room/portfolio-create \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","payload":{}}'
+```
+
+#### Orders
+
+```bash
+curl -X POST http://localhost:8000/room/orders \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","market":"xag"}'
+```
+
+#### Create Order
+
+```bash
+curl -X POST http://localhost:8000/room/order-create \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","payload":{"market":"xag","side":"buy","units":1,"order_type":"market"}}'
+```
+
+#### Close Order
+
+```bash
+curl -X POST http://localhost:8000/room/order-close \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","payload":{"order_id":12345}}'
+```
+
+#### Transactions
+
+```bash
+curl -X POST http://localhost:8000/room/transactions \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","market":"xag"}'
+```
+
+#### Close Transaction
+
+```bash
+curl -X POST http://localhost:8000/room/transaction-close \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","payload":{"transaction_id":12345}}'
+```
+
+#### Close Portfolio
+
+```bash
+curl -X POST http://localhost:8000/room/portfolio-close \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","payload":{"portfolio_id":12345}}'
+```
+
+### Portfolio APIs (proxied by API Server)
+
+#### Upsert strategy rule
+
+```bash
+curl -X POST http://localhost:8000/portfolio/rules \
+  -H "Content-Type: application/json" \
+  -d '{"strategy":"ema_wall_v1","symbol":"xag","enabled":true,"max_open_positions":1,"risk":0.01}'
+```
+
+#### Create manual portfolio order
+
+```bash
+curl -X POST http://localhost:8000/portfolio/orders \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","symbol":"xag","side":"buy","entry_price":32.1,"tp":33.1,"sl":31.6,"strategy":"manual"}'
+```
+
+#### Create bot portfolio order
+
+```bash
+curl -X POST http://localhost:8000/portfolio/orders/bot \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","symbol":"xag","side":"buy","entry_price":32.1,"strategy":"ema_wall_v1"}'
+```
+
+#### Price tick
+
+```bash
+curl -X POST http://localhost:8000/portfolio/price \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","symbol":"xag","price":32.4}'
+```
+
+#### User stats
+
+```bash
+curl http://localhost:8000/portfolio/users/09133040700/stats
+```
+
+#### DB records
 
 ```bash
 curl http://localhost:8000/portfolio/db/records
 ```
 
-Strategy PnL + positions (via api-server):
+#### Strategy PnL/positions
 
 ```bash
 curl http://localhost:8000/portfolio/strategies/ema_wall_v1/pnl-positions
 ```
 
-Admin full DB snapshot (via api-server):
+#### Admin DB snapshot
 
 ```bash
-curl http://localhost:8000/admin/db/all \
-  -H "x-admin-key: change-me-admin"
+curl http://localhost:8000/admin/db/all -H "x-admin-key: change-me-admin"
 ```
 
-Room status:
+---
+
+## 5) Worker-level APIs (direct access)
+
+### Bot Auth Worker (`http://localhost:8002`)
 
 ```bash
-curl -X POST http://localhost:8000/room/status \
-  -H "Content-Type: application/json" \
-  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag"}'
+curl http://localhost:8002/health
 ```
 
-Room orders:
-
 ```bash
-curl -X POST http://localhost:8000/room/orders \
+curl -X POST http://localhost:8002/login \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"0912xxxxxxx","base_domain":"https://demo.hivagold.com","market":"xag"}'
+  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com"}'
 ```
 
-### Portfolio Strategy Tester API (direct worker)
+```bash
+curl -X POST http://localhost:8002/logout \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","base_domain":"https://demo.hivagold.com"}'
+```
 
-All direct bot-simulator-worker endpoints require `x-api-key`.
-
-Process API:
-
-`POST http://localhost:8007/portfolio/process`
+### Bot Captcha Worker (`http://localhost:8001`)
 
 ```bash
-curl -X POST http://localhost:8007/portfolio/process \
+curl http://localhost:8001/health
+```
+
+```bash
+curl -X POST http://localhost:8001/solve \
+  -F "image=@captcha.jpg"
+```
+
+### Bot Room Worker (`http://localhost:8003`)
+
+```bash
+curl http://localhost:8003/health
+```
+
+```bash
+curl -X POST http://localhost:8003/room/status \
   -H "Content-Type: application/json" \
-  -H "x-api-key: change-me" \
+  -d '{"mobile":"09133040700","base_domain":"https://demo.hivagold.com","market":"xag"}'
+```
+
+```bash
+curl -X POST http://localhost:8003/room/orders \
+  -H "Content-Type: application/json" \
+  -d '{"mobile":"09133040700","base_domain":"https://demo.hivagold.com","market":"xag"}'
+```
+
+### Bot Trading Worker (`http://localhost:8004`)
+
+```bash
+curl http://localhost:8004/health
+```
+
+```bash
+curl http://localhost:8004/signals/latest
+```
+
+```bash
+curl -X POST http://localhost:8004/trading/process \
+  -H "Content-Type: application/json" \
   -d '{"action":"status","payload":{}}'
 ```
 
-Read APIs:
+WebSocket stream:
+
+- `ws://localhost:8004/signals/ws`
+
+### Bot Simulator Worker (`http://localhost:8007`)
+
+All endpoints below require header `x-api-key`.
 
 ```bash
-# all records in strategy_portfolios + strategy_positions
-curl http://localhost:8007/portfolio/db/records \
-  -H "x-api-key: change-me"
-
-# per-strategy pnl + positions
-curl http://localhost:8007/portfolio/strategies/ema_wall_v1/pnl-positions \
-  -H "x-api-key: change-me"
-
-# admin snapshot of DB + per-strategy aggregates
-curl http://localhost:8007/portfolio/admin/db \
-  -H "x-api-key: change-me"
+curl http://localhost:8007/health
 ```
 
-List discovered strategies:
-
 ```bash
-curl -X POST http://localhost:8007/portfolio/process \
+curl -X POST http://localhost:8007/portfolio/orders \
   -H "Content-Type: application/json" \
   -H "x-api-key: change-me" \
-  -d '{"action":"list_strategies","payload":{}}'
+  -d '{"mobile":"09133040700","symbol":"xag","side":"buy","entry_price":32.1,"strategy":"ema_wall_v1"}'
 ```
 
-Get strategy stats:
-
 ```bash
-curl -X POST http://localhost:8007/portfolio/process \
+curl -X PATCH http://localhost:8007/portfolio/users/09133040700/positions/1 \
   -H "Content-Type: application/json" \
   -H "x-api-key: change-me" \
-  -d '{"action":"strategy_stats","payload":{"strategy":"ema_wall_v1"}}'
+  -d '{"tp":33.2,"sl":31.5}'
 ```
-
----
-
-## Endpoint summary (API Server)
-
-- `GET /health`
-- `POST /login`
-- `POST /logout`
-- `GET /signals/latest`
-- `POST /room/status`
-- `POST /room/portfolios`
-- `POST /room/orders`
-- `POST /room/order-create`
-- `POST /room/order-close`
-- `POST /room/transactions`
-- `POST /room/transaction-close`
-- `POST /room/portfolio-close`
-- `POST /room/portfolio-create`
-
-## 6) Built-in API CLI commands
-
-The API server includes `workers/api_server/cli.py`:
 
 ```bash
-cd workers/api_server
-python cli.py --help
-python cli.py login --mobile 0912xxxxxxx --password your-password
-python cli.py logout --mobile 0912xxxxxxx
-python cli.py signals --latest
-python cli.py room-status --mobile 0912xxxxxxx --base-domain https://demo.hivagold.com --market xag
-python cli.py room portfolios --mobile 0912xxxxxxx
-python cli.py room orders --mobile 0912xxxxxxx
-python cli.py room order-create --mobile 0912xxxxxxx --action-side buy --order-type market --units 1
-python cli.py room order-close --mobile 0912xxxxxxx --order-id <id>
-python cli.py room transactions --mobile 0912xxxxxxx
-python cli.py room transaction-close --mobile 0912xxxxxxx --transaction-id <id>
-python cli.py room portfolio-close --mobile 0912xxxxxxx --portfolio-id <id>
-python cli.py room portfolio-create --mobile 0912xxxxxxx
+curl -X POST http://localhost:8007/portfolio/users/09133040700/positions/1/close \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: change-me" \
+  -d '{"close_price":32.8,"reason":"manual-close"}'
 ```
 
----
+```bash
+curl -X POST http://localhost:8007/portfolio/price \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: change-me" \
+  -d '{"mobile":"09133040700","symbol":"xag","price":32.5}'
+```
 
-## Environment Variables
-
-Each service reads environment variables from its `config.py` and `.env`.
-
-Important ones:
-
-- Shared:
-  - `ENVIRONMENT`
-  - `APP_NAME`
-  - `APP_VERSION`
-  - `REDIS_HOST`
-  - `REDIS_PORT`
-  - `REDIS_PASSWORD`
-- Trading worker:
-  - `TRADING_WORKER_HOST`, `TRADING_WORKER_PORT`
-  - `TRADING_USERS_JSON_PATH`
-  - `WS_LIVE_BARS_PATH`, `WS_PRICE_PATH`, `WS_WALL_PATH`, `BARS_API_PATH`
-  - `ENABLE_STRATEGY_EMA_WALL_V1`
-  - `REDIS_MARKET_EVENT_CHANNEL`
-- Portfolio worker:
-  - `SIMULATOR_WORKER_HOST`, `SIMULATOR_WORKER_PORT`
-  - `BOT_API_KEY`
-  - `DATABASE_PATH`
-  - `REDIS_HOST`, `REDIS_PORT`, `REDIS_MARKET_EVENT_CHANNEL`
-
----
-
-## Notes
-
-- `workers/bot_trading_worker/users.json` is mounted read-only in Docker Compose.
-- Trading worker supports websocket streaming on `/signals/ws`.
-- Portfolio worker is strategy-centric (not per-user) and consumes Redis events from trading worker.
-- Keep secrets in `.env` or a secret manager; do not hardcode credentials.
+```bash
+curl -H "x-api-key: change-me" http://localhost:8007/portfolio/users/09133040700/stats
+curl -H "x-api-key: change-me" http://localhost:8007/portfolio/users/09133040700/history
+curl -H "x-api-key: change-me" http://localhost:8007/portfolio/db/records
+curl -H "x-api-key: change-me" http://localhost:8007/portfolio/strategies/ema_wall_v1/pnl-positions
+curl -H "x-api-key: change-me" http://localhost:8007/portfolio/admin/db
+```
