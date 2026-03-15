@@ -6,7 +6,6 @@ from fastapi import FastAPI, HTTPException
 from config import get_config
 from .clients import build_clients
 from .logging_setup import setup_logger
-from .queue_manager import RoomQueueManager
 from .schemas import (
     CreateActivePortfolioRequest,
     CreateActivePortfolioResponse,
@@ -82,16 +81,9 @@ room_worker_service = RoomWorkerService(
     check_room_status_service=check_room_status_service,
     logger=logger,
 )
-queue_manager = RoomQueueManager(room_worker_service, logger)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting room queue manager")
-    await queue_manager.start()
     yield
-    logger.info("Stopping room queue manager")
-    await queue_manager.stop()
 
 
 app = FastAPI(
@@ -114,7 +106,7 @@ async def room_status(request: RoomStatusRequest):
         logger.debug("Received room_status request mobile=%s", request.mobile)
         args = request.model_dump(exclude_none=True)
         args["worker_action"] = "check_room_status"
-        result = await queue_manager.enqueue(args)
+        result = await room_worker_service.execute(args)
         return RoomStatusResponse(**result)
     except Exception as exc:
         logger.error(f"Error in room_status endpoint: {exc}")
@@ -136,7 +128,7 @@ async def get_portfolios(request: GetPortfoliosRequest):
         logger.debug("Received get_portfolios request mobile=%s", request.mobile)
         args = request.model_dump(exclude_none=True)
         args["worker_action"] = "get_portfolios"
-        result = await queue_manager.enqueue(args)
+        result = await room_worker_service.execute(args)
         _raise_if_failed(result)
         return GetPortfoliosResponse(**result)
     except HTTPException:
@@ -154,7 +146,7 @@ async def create_active_portfolio(request: CreateActivePortfolioRequest):
         )
         args = request.model_dump(exclude_none=True)
         args["worker_action"] = "create_active_portfolio"
-        result = await queue_manager.enqueue(args)
+        result = await room_worker_service.execute(args)
         _raise_if_failed(result)
         return CreateActivePortfolioResponse(**result)
     except HTTPException:
@@ -170,7 +162,7 @@ async def get_orders(request: GetOrdersRequest):
         logger.debug("Received get_orders request mobile=%s", request.mobile)
         args = request.model_dump(exclude_none=True)
         args["worker_action"] = "get_orders"
-        result = await queue_manager.enqueue(args)
+        result = await room_worker_service.execute(args)
         _raise_if_failed(result)
         return GetOrdersResponse(**result)
     except HTTPException:
@@ -186,7 +178,7 @@ async def create_order(request: CreateOrderRequest):
         logger.debug("Received create_order request mobile=%s", request.mobile)
         args = request.model_dump(exclude_none=True)
         args["worker_action"] = "create_order"
-        result = await queue_manager.enqueue(args)
+        result = await room_worker_service.execute(args)
         _raise_if_failed(result)
         return CreateOrderResponse(**result)
     except HTTPException:
@@ -202,7 +194,7 @@ async def close_order(request: CloseOrderRequest):
         logger.debug("Received close_order request mobile=%s", request.mobile)
         args = request.model_dump(exclude_none=True)
         args["worker_action"] = "close_order"
-        result = await queue_manager.enqueue(args)
+        result = await room_worker_service.execute(args)
         _raise_if_failed(result)
         return CloseOrderResponse(**result)
     except HTTPException:
@@ -218,7 +210,7 @@ async def get_transactions(request: GetTransactionsRequest):
         logger.debug("Received get_transactions request mobile=%s", request.mobile)
         args = request.model_dump(exclude_none=True)
         args["worker_action"] = "get_transactions"
-        result = await queue_manager.enqueue(args)
+        result = await room_worker_service.execute(args)
         _raise_if_failed(result)
         return GetTransactionsResponse(**result)
     except HTTPException:
@@ -234,7 +226,7 @@ async def close_transaction(request: CloseTransactionRequest):
         logger.debug("Received close_transaction request mobile=%s", request.mobile)
         args = request.model_dump(exclude_none=True)
         args["worker_action"] = "close_transaction"
-        result = await queue_manager.enqueue(args)
+        result = await room_worker_service.execute(args)
         _raise_if_failed(result)
         return CloseTransactionResponse(**result)
     except HTTPException:
@@ -250,7 +242,7 @@ async def close_portfolio(request: ClosePortfolioRequest):
         logger.debug("Received close_portfolio request mobile=%s", request.mobile)
         args = request.model_dump(exclude_none=True)
         args["worker_action"] = "close_portfolio"
-        result = await queue_manager.enqueue(args)
+        result = await room_worker_service.execute(args)
         _raise_if_failed(result)
         return ClosePortfolioResponse(**result)
     except HTTPException:

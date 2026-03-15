@@ -4,7 +4,6 @@ from fastapi import Depends, FastAPI, Header, HTTPException
 
 from config import get_config
 from .logging_setup import setup_logger
-from .queue_manager import PortfolioQueueManager
 from .schemas import HealthResponse, ProcessPortfolioRequest, ProcessPortfolioResponse
 from .schemas import AdminDbResponse, DbRecordsResponse, StrategyPnlPositionResponse
 from .service import PortfolioWorkerService
@@ -12,16 +11,11 @@ from .service import PortfolioWorkerService
 config = get_config()
 logger = setup_logger()
 service = PortfolioWorkerService(config, logger)
-queue_manager = PortfolioQueueManager(service, logger)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await queue_manager.start()
     await service.start()
     yield
     await service.stop()
-    await queue_manager.stop()
 
 
 app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION, lifespan=lifespan)
@@ -39,7 +33,7 @@ async def health():
 
 @app.post("/portfolio/process", response_model=ProcessPortfolioResponse)
 async def process(payload: ProcessPortfolioRequest, _=Depends(require_api_key)):
-    result = await queue_manager.enqueue(payload.model_dump())
+    result = await service.process(payload.model_dump())
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "processing error"))
     return result

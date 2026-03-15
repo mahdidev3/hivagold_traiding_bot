@@ -33,7 +33,7 @@ Examples:
 - `strategy_portfolios`
 - `strategy_positions` (includes `symbol` column)
 
-## API (queue-based)
+## API
 All endpoints except `/health` require `x-api-key`.
 
 ### Process action
