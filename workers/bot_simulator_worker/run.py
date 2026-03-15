@@ -29,7 +29,7 @@ if __name__ == "__main__":
 
     uvicorn.run(
         "app.main:app",
-        host=config.PORTFOLIO_WORKER_HOST,
-        port=config.PORTFOLIO_WORKER_PORT,
+        host=config.SIMULATOR_WORKER_HOST,
+        port=config.SIMULATOR_WORKER_PORT,
         reload=config.ENVIRONMENT == "development",
     )

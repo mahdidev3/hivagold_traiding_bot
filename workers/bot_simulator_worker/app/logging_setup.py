@@ -1,7 +1,7 @@
 import logging
 
 
-def setup_logger(name: str = "bot_portfolio_worker") -> logging.Logger:
+def setup_logger(name: str = "bot_simulator_worker") -> logging.Logger:
     logger = logging.getLogger(name)
     if logger.handlers:
         return logger

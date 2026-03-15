@@ -7,15 +7,15 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-function Build { Write-Host "[*] Building portfolio worker" -ForegroundColor Cyan; docker-compose build }
+function Build { Write-Host "[*] Building simulator worker" -ForegroundColor Cyan; docker-compose build }
 function Up {
-    Write-Host "[*] Starting portfolio worker" -ForegroundColor Cyan
+    Write-Host "[*] Starting simulator worker" -ForegroundColor Cyan
     docker-compose up -d
     Write-Host "[OK] Portfolio worker started. API: http://localhost:8007" -ForegroundColor Green
 }
-function Down { Write-Host "[*] Stopping portfolio worker" -ForegroundColor Cyan; docker-compose down }
+function Down { Write-Host "[*] Stopping simulator worker" -ForegroundColor Cyan; docker-compose down }
 function Restart { docker-compose restart }
-function Logs { docker-compose logs -f portfolio-worker }
+function Logs { docker-compose logs -f bot-simulator-worker }
 function All { Build; Up; Logs }
 function ShowVolumes { docker system df -v }
 function RemoveComposeVolumes { docker-compose down -v }

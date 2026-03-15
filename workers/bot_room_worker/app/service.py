@@ -6,7 +6,7 @@ import requests
 
 from config import Config
 from .clients import (
-    HivagoldRedisClient,
+    UserSessionStore,
     OrdersClient,
     PortfolioClient,
     normalize_mobile,
@@ -35,7 +35,7 @@ class BaseRoomService:
     def __init__(
         self,
         config: Config,
-        redis_client: HivagoldRedisClient,
+        redis_client: UserSessionStore,
         logger: logging.Logger,
     ):
         self.config = config
@@ -142,7 +142,7 @@ class GetPortfoliosService(BaseRoomService):
         self,
         config: Config,
         portfolio_client: PortfolioClient,
-        redis_client: HivagoldRedisClient,
+        redis_client: UserSessionStore,
         logger: logging.Logger,
     ):
         super().__init__(config, redis_client, logger)
@@ -178,7 +178,7 @@ class CreateActivePortfolioService(BaseRoomService):
         self,
         config: Config,
         portfolio_client: PortfolioClient,
-        redis_client: HivagoldRedisClient,
+        redis_client: UserSessionStore,
         logger: logging.Logger,
     ):
         super().__init__(config, redis_client, logger)
@@ -226,7 +226,7 @@ class GetOrdersService(BaseRoomService):
         self,
         config: Config,
         orders_client: OrdersClient,
-        redis_client: HivagoldRedisClient,
+        redis_client: UserSessionStore,
         logger: logging.Logger,
     ):
         super().__init__(config, redis_client, logger)
@@ -262,7 +262,7 @@ class CreateOrderService(BaseRoomService):
         self,
         config: Config,
         orders_client: OrdersClient,
-        redis_client: HivagoldRedisClient,
+        redis_client: UserSessionStore,
         logger: logging.Logger,
     ):
         super().__init__(config, redis_client, logger)
@@ -328,7 +328,7 @@ class CloseOrderService(BaseRoomService):
         self,
         config: Config,
         orders_client: OrdersClient,
-        redis_client: HivagoldRedisClient,
+        redis_client: UserSessionStore,
         logger: logging.Logger,
     ):
         super().__init__(config, redis_client, logger)
@@ -373,7 +373,7 @@ class GetTransactionsService(BaseRoomService):
         self,
         config: Config,
         portfolio_client: PortfolioClient,
-        redis_client: HivagoldRedisClient,
+        redis_client: UserSessionStore,
         logger: logging.Logger,
     ):
         super().__init__(config, redis_client, logger)
@@ -409,7 +409,7 @@ class CloseTransactionService(BaseRoomService):
         self,
         config: Config,
         portfolio_client: PortfolioClient,
-        redis_client: HivagoldRedisClient,
+        redis_client: UserSessionStore,
         logger: logging.Logger,
     ):
         super().__init__(config, redis_client, logger)
@@ -455,7 +455,7 @@ class ClosePortfolioService(BaseRoomService):
         config: Config,
         portfolio_client: PortfolioClient,
         orders_client: OrdersClient,
-        redis_client: HivagoldRedisClient,
+        redis_client: UserSessionStore,
         logger: logging.Logger,
     ):
         super().__init__(config, redis_client, logger)
