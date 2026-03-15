@@ -32,6 +32,7 @@ class SessionStore:
     def __init__(self, users_root: str):
         self.users_root = Path(users_root)
         self.logger = logging.getLogger(__name__)
+        self._cache: dict[Path, tuple[float, dict[str, Any]]] = {}
 
     def _user_file(self, mobile: str) -> Path:
         normalized_mobile = normalize_mobile(mobile) or (mobile or "").strip()
@@ -41,6 +42,10 @@ class SessionStore:
         file_path = self._user_file(mobile)
         if not file_path.exists():
             return {"sessions": {}}
+        stat = file_path.stat()
+        cache_entry = self._cache.get(file_path)
+        if cache_entry and cache_entry[0] == stat.st_mtime:
+            return cache_entry[1]
         try:
             with file_path.open("r", encoding="utf-8") as handle:
                 data = json.load(handle)
@@ -51,6 +56,7 @@ class SessionStore:
             return {"sessions": {}}
         if not isinstance(data.get("sessions"), dict):
             data["sessions"] = {}
+        self._cache[file_path] = (stat.st_mtime, data)
         return data
 
     def get_session_data(self, mobile: str, domain: str) -> Optional[Dict[str, Any]]:

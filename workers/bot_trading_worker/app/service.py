@@ -15,6 +15,7 @@ from .modules import EmaWallStrategyModule, MarketSnapshot, StrategyAction, Stra
 
 LIVE_SUB_MESSAGE = {"action": "SubAdd", "subs": ["0~hivagold~xag~gold"]}
 PRICE_PING_MESSAGE = {"type": "ping"}
+MAX_BARS_BUFFER = 600
 
 
 @dataclass
@@ -55,6 +56,8 @@ class TradingWorkerService:
         self._active_bot_ids: dict[str, str] = {}
         self._bot_keys_by_id: dict[str, str] = {}
         self._strategies: dict[str, Any] = {EmaWallStrategyModule.name: EmaWallStrategyModule(config)}
+        self._bots_cache_mtime: float | None = None
+        self._bots_cache: list[BotThreadConfig] = []
 
     def _user_key(self, mobile: str, domain: str) -> str:
         return f"{normalize_domain(domain)}:{normalize_mobile(mobile)}"
@@ -73,6 +76,9 @@ class TradingWorkerService:
         if not users_path.exists():
             self.logger.info("Users config file not found: %s", users_path)
             return []
+        stat = users_path.stat()
+        if self._bots_cache_mtime == stat.st_mtime:
+            return [BotThreadConfig(**bot.__dict__) for bot in self._bots_cache]
         try:
             data = json.loads(users_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
@@ -97,6 +103,8 @@ class TradingWorkerService:
             )
             if bot.mobile and bot.password and bot.domain:
                 bots.append(bot)
+        self._bots_cache_mtime = stat.st_mtime
+        self._bots_cache = [BotThreadConfig(**bot.__dict__) for bot in bots]
         return bots
 
     async def start(self) -> dict[str, Any]:
@@ -275,6 +283,12 @@ class TradingWorkerService:
     def _resolve_strategy(self, bot: BotThreadConfig):
         return self._strategies.get(bot.strategy)
 
+    def _prune_bars(self, state: RuntimeState) -> None:
+        if len(state.bars_by_ts) <= MAX_BARS_BUFFER:
+            return
+        keep_keys = sorted(state.bars_by_ts.keys())[-MAX_BARS_BUFFER:]
+        state.bars_by_ts = {k: state.bars_by_ts[k] for k in keep_keys}
+
     async def _apply_strategy(self, bot: BotThreadConfig, user: UserContext, session: requests.Session, state: RuntimeState) -> None:
         strategy = self._resolve_strategy(bot)
         if strategy is None:
@@ -361,6 +375,7 @@ class TradingWorkerService:
                 bars = await asyncio.to_thread(self.market_client.fetch_bars, session, user.domain, self.config.BARS_SYMBOL, self.config.BARS_RESOLUTION, end_ts - self.config.LOOKBACK_SECONDS, end_ts)
                 for bar in bars:
                     state.bars_by_ts[int(bar["ts"])] = bar
+                self._prune_bars(state)
                 state.last_error = None
             except BadRequestError as exc:
                 state.last_error = exc.message
@@ -390,6 +405,7 @@ class TradingWorkerService:
             bar = self._extract_bar(payload)
             if bar:
                 state.bars_by_ts[int(bar["ts"])] = bar
+                self._prune_bars(state)
                 await self._publish_event(self._event(bot, "live-bars", bar))
         except Exception:
             return

@@ -316,6 +316,7 @@ class UserSessionStore:
     def __init__(self, users_root: str, logger: logging.Logger):
         self.users_root = Path(users_root)
         self.logger = logger
+        self._cache: dict[Path, tuple[float, dict[str, Any]]] = {}
 
     def _user_file(self, mobile: str) -> Path:
         normalized_mobile = normalize_mobile(mobile) or (mobile or "").strip()
@@ -325,6 +326,10 @@ class UserSessionStore:
         file_path = self._user_file(mobile)
         if not file_path.exists():
             return {"sessions": {}}
+        stat = file_path.stat()
+        cache_entry = self._cache.get(file_path)
+        if cache_entry and cache_entry[0] == stat.st_mtime:
+            return cache_entry[1]
         try:
             with file_path.open("r", encoding="utf-8") as handle:
                 data = json.load(handle)
@@ -336,6 +341,7 @@ class UserSessionStore:
         sessions = data.get("sessions")
         if not isinstance(sessions, dict):
             data["sessions"] = {}
+        self._cache[file_path] = (stat.st_mtime, data)
         return data
 
     def _write_user_info(self, mobile: str, data: dict[str, Any]) -> None:
@@ -343,6 +349,7 @@ class UserSessionStore:
         file_path.parent.mkdir(parents=True, exist_ok=True)
         with file_path.open("w", encoding="utf-8") as handle:
             json.dump(data, handle, ensure_ascii=False, indent=2)
+        self._cache[file_path] = (file_path.stat().st_mtime, data)
 
     def save_login_data(
         self, mobile: str, login_data: Any, domain: str, ttl: int
