@@ -30,7 +30,7 @@ tests/
 
 ## Service Responsibilities
 
-- **api_server**: public HTTP API, request validation, and queue-based dispatch to workers.
+- **api_server**: public HTTP API, request validation, and stateless request dispatch to workers.
 - **bot_auth_worker**: login/logout session handling and captcha verification flow.
 - **bot_room_worker**: portfolio/order/transaction management endpoints against Hivagold room APIs.
 - **bot_trading_worker**: keeps existing `price`/`live-bars`/`wall` websocket streams, runs enabled strategy modules, publishes signals + market events.
@@ -269,7 +269,7 @@ curl -X POST http://localhost:8000/room/orders \
 
 All direct portfolio-worker endpoints require `x-api-key`.
 
-Queue API:
+Process API:
 
 `POST http://localhost:8007/portfolio/process`
 
