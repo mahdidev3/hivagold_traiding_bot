@@ -71,8 +71,8 @@ API Server will be available at:
 All request examples below use:
 
 - **mobile:** `09133040700`
-- **password:** `AMIR@700`
-- **base_domain:** `https://demo.hivagold.com`
+- **password:** `Amir@700`
+- **base_domain:** `https://hivagold.com`
 
 ---
 
@@ -89,13 +89,13 @@ curl http://localhost:8000/health
 ```bash
 curl -X POST http://localhost:8000/login \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com"}'
+  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com"}'
 ```
 
 ```bash
 curl -X POST http://localhost:8000/logout \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","base_domain":"https://demo.hivagold.com"}'
+  -d '{"mobile":"09133040700","base_domain":"https://hivagold.com"}'
 ```
 
 ### Signals
@@ -109,7 +109,7 @@ curl http://localhost:8000/signals/latest
 ```bash
 curl -X POST http://localhost:8000/room/status \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","base_domain":"https://demo.hivagold.com","market":"xag"}'
+  -d '{"mobile":"09133040700","base_domain":"https://hivagold.com","market":"xag"}'
 ```
 
 ### Room Generic Action APIs (`/room/{action_name}`)
@@ -119,7 +119,7 @@ curl -X POST http://localhost:8000/room/status \
 ```bash
 curl -X POST http://localhost:8000/room/portfolios \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com"}'
+  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com"}'
 ```
 
 #### Create Portfolio
@@ -127,7 +127,7 @@ curl -X POST http://localhost:8000/room/portfolios \
 ```bash
 curl -X POST http://localhost:8000/room/portfolio-create \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","payload":{}}'
+  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","payload":{}}'
 ```
 
 #### Orders
@@ -135,7 +135,7 @@ curl -X POST http://localhost:8000/room/portfolio-create \
 ```bash
 curl -X POST http://localhost:8000/room/orders \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","market":"xag"}'
+  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","market":"xag"}'
 ```
 
 #### Create Order
@@ -143,7 +143,7 @@ curl -X POST http://localhost:8000/room/orders \
 ```bash
 curl -X POST http://localhost:8000/room/order-create \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","payload":{"market":"xag","side":"buy","units":1,"order_type":"market"}}'
+  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","payload":{"market":"xag","side":"buy","units":1,"order_type":"market"}}'
 ```
 
 #### Close Order
@@ -151,7 +151,7 @@ curl -X POST http://localhost:8000/room/order-create \
 ```bash
 curl -X POST http://localhost:8000/room/order-close \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","payload":{"order_id":12345}}'
+  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","payload":{"order_id":12345}}'
 ```
 
 #### Transactions
@@ -159,7 +159,7 @@ curl -X POST http://localhost:8000/room/order-close \
 ```bash
 curl -X POST http://localhost:8000/room/transactions \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","market":"xag"}'
+  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","market":"xag"}'
 ```
 
 #### Close Transaction
@@ -167,7 +167,7 @@ curl -X POST http://localhost:8000/room/transactions \
 ```bash
 curl -X POST http://localhost:8000/room/transaction-close \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","payload":{"transaction_id":12345}}'
+  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","payload":{"transaction_id":12345}}'
 ```
 
 #### Close Portfolio
@@ -175,7 +175,7 @@ curl -X POST http://localhost:8000/room/transaction-close \
 ```bash
 curl -X POST http://localhost:8000/room/portfolio-close \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com","payload":{"portfolio_id":12345}}'
+  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com","payload":{"portfolio_id":12345}}'
 ```
 
 ### Portfolio APIs (proxied by API Server)
@@ -249,13 +249,13 @@ curl http://localhost:8002/health
 ```bash
 curl -X POST http://localhost:8002/login \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","password":"AMIR@700","base_domain":"https://demo.hivagold.com"}'
+  -d '{"mobile":"09133040700","password":"Amir@700","base_domain":"https://hivagold.com"}'
 ```
 
 ```bash
 curl -X POST http://localhost:8002/logout \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","base_domain":"https://demo.hivagold.com"}'
+  -d '{"mobile":"09133040700","base_domain":"https://hivagold.com"}'
 ```
 
 ### Bot Captcha Worker (`http://localhost:8001`)
@@ -278,13 +278,13 @@ curl http://localhost:8003/health
 ```bash
 curl -X POST http://localhost:8003/room/status \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","base_domain":"https://demo.hivagold.com","market":"xag"}'
+  -d '{"mobile":"09133040700","base_domain":"https://hivagold.com","market":"xag"}'
 ```
 
 ```bash
 curl -X POST http://localhost:8003/room/orders \
   -H "Content-Type: application/json" \
-  -d '{"mobile":"09133040700","base_domain":"https://demo.hivagold.com","market":"xag"}'
+  -d '{"mobile":"09133040700","base_domain":"https://hivagold.com","market":"xag"}'
 ```
 
 ### Bot Trading Worker (`http://localhost:8004`)

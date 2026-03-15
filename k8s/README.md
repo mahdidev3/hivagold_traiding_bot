@@ -18,7 +18,7 @@ This folder contains the baseline Kubernetes setup for the Hivagold trading bot 
   - `bot-room-worker`
   - `bot-trading-worker`
 - Ingress for public API entrypoint (`api-server`)
-- ExternalName Service (`hivagold-main-api`) for DNS-style CNAME forwarding to `demo.hivagold.com`
+- ExternalName Service (`hivagold-main-api`) for DNS-style CNAME forwarding to `hivagold.com`
 - `kustomization.yaml` to apply everything in order
 
 ## Image policy (important)

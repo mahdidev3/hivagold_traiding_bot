@@ -18,7 +18,7 @@ class DummyConfig:
 
 class DummyUser:
     mobile = "0912"
-    domain = "https://demo.hivagold.com"
+    domain = "https://hivagold.com"
 
 
 async def _run_test():

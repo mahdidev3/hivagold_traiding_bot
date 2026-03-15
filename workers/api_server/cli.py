@@ -11,13 +11,15 @@ def _print_response(response: requests.Response):
 
 def add_common_room_args(parser: argparse.ArgumentParser):
     parser.add_argument("--mobile", required=True)
-    parser.add_argument("--base-domain", default="https://demo.hivagold.com")
+    parser.add_argument("--base-domain", default="https://hivagold.com")
     parser.add_argument("--market", default="xag", choices=["xag", "mazaneh", "ounce"])
 
 
 def main():
     parser = argparse.ArgumentParser(description="Hivagold API Server CLI")
-    parser.add_argument("--server", default="http://localhost:8000", help="API server base URL")
+    parser.add_argument(
+        "--server", default="http://localhost:8000", help="API server base URL"
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -35,8 +37,10 @@ def main():
 
     room_status_parser = subparsers.add_parser("room-status")
     room_status_parser.add_argument("--mobile", required=True)
-    room_status_parser.add_argument("--base-domain", default="https://demo.hivagold.com")
-    room_status_parser.add_argument("--market", default="xag", choices=["xag", "mazaneh", "ounce"])
+    room_status_parser.add_argument("--base-domain", default="https://hivagold.com")
+    room_status_parser.add_argument(
+        "--market", default="xag", choices=["xag", "mazaneh", "ounce"]
+    )
 
     room_parser = subparsers.add_parser("room")
     room_parser.add_argument(
@@ -87,7 +91,11 @@ def main():
         return
 
     if args.command == "room-status":
-        payload = {"mobile": args.mobile, "base_domain": args.base_domain, "market": args.market}
+        payload = {
+            "mobile": args.mobile,
+            "base_domain": args.base_domain,
+            "market": args.market,
+        }
         response = requests.post(f"{args.server}/room/status", json=payload, timeout=30)
         _print_response(response)
         return
@@ -111,7 +119,9 @@ def main():
             "take_profit": args.take_profit,
         }
         payload["payload"] = {k: v for k, v in optional_fields.items() if v is not None}
-        response = requests.post(f"{args.server}/room/{args.action}", json=payload, timeout=30)
+        response = requests.post(
+            f"{args.server}/room/{args.action}", json=payload, timeout=30
+        )
         _print_response(response)
         return
 

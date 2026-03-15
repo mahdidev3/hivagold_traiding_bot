@@ -4,7 +4,13 @@ from workers.api_server.app.service import ApiServerService
 class DummyClient:
     def __init__(self):
         self.calls = []
-        self.status_payload = {"success": True, "market": "xag", "is_open": True, "active": True, "reason": "in_shift"}
+        self.status_payload = {
+            "success": True,
+            "market": "xag",
+            "is_open": True,
+            "active": True,
+            "reason": "in_shift",
+        }
 
     def post(self, path: str, body: dict):
         self.calls.append(("post", path, body))
@@ -22,7 +28,9 @@ class DummyConfig:
     MARKET_CHOICES = ("xag", "mazaneh", "ounce")
 
 
-def build_service(room: DummyClient | None = None, portfolio: DummyClient | None = None):
+def build_service(
+    room: DummyClient | None = None, portfolio: DummyClient | None = None
+):
     return ApiServerService(
         DummyConfig(),
         DummyClient(),
@@ -53,7 +61,13 @@ def test_api_server_service_routes_to_workers():
 
 def test_room_action_blocks_when_room_is_closed():
     room = DummyClient()
-    room.status_payload = {"success": True, "market": "xag", "is_open": False, "active": True, "reason": "out_of_shift"}
+    room.status_payload = {
+        "success": True,
+        "market": "xag",
+        "is_open": False,
+        "active": True,
+        "reason": "out_of_shift",
+    }
     service = build_service(room=room)
 
     result = service.execute(
@@ -61,7 +75,7 @@ def test_room_action_blocks_when_room_is_closed():
         {
             "endpoint": "/room/orders",
             "mobile": "0912",
-            "base_domain": "https://demo.hivagold.com",
+            "base_domain": "https://hivagold.com",
             "market": "xag",
         },
     )
@@ -86,7 +100,7 @@ def test_room_action_sets_room_prefix_from_market():
         {
             "endpoint": "/room/orders",
             "mobile": "0912",
-            "base_domain": "https://demo.hivagold.com",
+            "base_domain": "https://hivagold.com",
             "market": "mazaneh",
         },
     )
@@ -110,7 +124,7 @@ def test_room_status_proxies_to_room_worker():
 
     result = service.execute(
         "check_room_status",
-        {"mobile": "0912", "base_domain": "https://demo.hivagold.com", "market": "ounce"},
+        {"mobile": "0912", "base_domain": "https://hivagold.com", "market": "ounce"},
     )
 
     assert result["success"] is True
@@ -118,7 +132,7 @@ def test_room_status_proxies_to_room_worker():
     assert room.calls[-1] == (
         "post",
         "/room/status",
-        {"mobile": "0912", "market": "ounce", "base_domain": "https://demo.hivagold.com"},
+        {"mobile": "0912", "market": "ounce", "base_domain": "https://hivagold.com"},
     )
 
 

@@ -23,6 +23,8 @@ api_client, captcha_worker_client, session_store = build_clients(config, logger)
 service = LoginWorkerService(
     api_client, captcha_worker_client, session_store, config, logger
 )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     yield
@@ -79,7 +81,7 @@ async def health():
 # Example:
 # curl -X POST "http://auth-worker-service/login" \
 #     -H "Content-Type: application/json" \
-#     -d '{"mobile": "09123456789", "password": "your-password", "max_retries": 3 , base_domain: "https://demo.hivagold.com" , login_url: "https://demo.hivagold.com/api/user/api/auth/login/" , get_captcha_info_url: "https://demo.hivagold.com/api/user/api/captcha-image/" , get_captcha_image_base_url: "https://demo.hivagold.com/api" , verify_captcha_url: "https://demo.hivagold.com/api/user/api/captcha-verify/" , cookies_validation_url: "https://demo.hivagold.com/api/profile/api/tether-rate/"}'
+#     -d '{"mobile": "09123456789", "password": "your-password", "max_retries": 3 , base_domain: "https://hivagold.com" , login_url: "https://hivagold.com/api/user/api/auth/login/" , get_captcha_info_url: "https://hivagold.com/api/user/api/captcha-image/" , get_captcha_image_base_url: "https://hivagold.com/api" , verify_captcha_url: "https://hivagold.com/api/user/api/captcha-verify/" , cookies_validation_url: "https://hivagold.com/api/profile/api/tether-rate/"}'
 #
 # Response:
 # - {"success": true , "cookies": {"csrftoken": "abc123", "sessionid": "def456"}}
@@ -101,7 +103,9 @@ async def login(payload: LoginRequest):
             build_api_url(base_domain, config.VERIFY_CAPTCHA_PATH),
             build_api_url(base_domain, config.COOKIES_VALIDATION_PATH),
         )
-        logger.info("Login request finished success=%s for mobile=%s", success, payload.mobile)
+        logger.info(
+            "Login request finished success=%s for mobile=%s", success, payload.mobile
+        )
         return LoginResponse(success=success)
     except Exception as exc:
         logger.exception("Unhandled error while processing login request")

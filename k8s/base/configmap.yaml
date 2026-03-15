@@ -19,6 +19,6 @@ data:
   REDIS_DB: "0"
 
   # Domain defaults (override for your real environment)
-  BASE_DOMAIN: https://demo.hivagold.com
+  BASE_DOMAIN: https://hivagold.com
   DEFAULT_MARKET: xag
   HIVAGOLD_TENANT_ID: "11111"

@@ -23,7 +23,7 @@ class Config:
         os.getenv("MAIN_API_RETRY_DELAY_SECONDS", "1.5")
     )
 
-    DEFAULT_BASE_DOMAIN: str = os.getenv("BASE_DOMAIN", "http://demo.hivagold.com")
+    DEFAULT_BASE_DOMAIN: str = os.getenv("BASE_DOMAIN", "http://hivagold.com")
 
     LOGIN_PATH: str = os.getenv("LOGIN_PATH", "/api/user/api/auth/login/")
     CAPTCHA_INFO_PATH: str = os.getenv(

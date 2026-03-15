@@ -5,4 +5,4 @@ metadata:
   namespace: hivagold
 spec:
   type: ExternalName
-  externalName: demo.hivagold.com
+  externalName: hivagold.com

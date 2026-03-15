@@ -17,7 +17,16 @@ def _write_user_info(root: Path, mobile: str):
     user_dir = root / mobile
     user_dir.mkdir(parents=True, exist_ok=True)
     (user_dir / "User_info.json").write_text(
-        json.dumps({"sessions": {"demo.hivagold.com": {"cookies": {"sessionid": "x"}, "headers": {"User-Agent": "t"}}}}),
+        json.dumps(
+            {
+                "sessions": {
+                    "hivagold.com": {
+                        "cookies": {"sessionid": "x"},
+                        "headers": {"User-Agent": "t"},
+                    }
+                }
+            }
+        ),
         encoding="utf-8",
     )
 
@@ -39,7 +48,7 @@ def test_create_and_close_position(tmp_path: Path):
                 "take_profit": 12.0,
                 "stop_loss": 8.0,
                 "volume": 1,
-                "domain": "https://demo.hivagold.com",
+                "domain": "https://hivagold.com",
             }
         )
     )
@@ -71,7 +80,9 @@ def test_update_and_history(tmp_path: Path):
             }
         )
     )
-    updated = asyncio.run(service.update_position("0913", created["id"], {"take_profit": 8.5}))
+    updated = asyncio.run(
+        service.update_position("0913", created["id"], {"take_profit": 8.5})
+    )
     assert updated["take_profit"] == 8.5
 
     history = service.user_history("0913")
@@ -86,8 +97,32 @@ def test_records_aggregate_multiple_users(tmp_path: Path):
     _write_user_info(Path(cfg.USERS_STORAGE_DIR), "0915")
     service = SimulatorWorkerService(cfg, logger=__import__("logging").getLogger("t"))
 
-    asyncio.run(service.create_position({"mobile": "0914", "side": "buy", "entry_type": "market", "entry_price": 10.0, "take_profit": 12.0, "stop_loss": 8.0, "volume": 1}))
-    asyncio.run(service.create_position({"mobile": "0915", "side": "buy", "entry_type": "market", "entry_price": 10.0, "take_profit": 12.0, "stop_loss": 8.0, "volume": 1}))
+    asyncio.run(
+        service.create_position(
+            {
+                "mobile": "0914",
+                "side": "buy",
+                "entry_type": "market",
+                "entry_price": 10.0,
+                "take_profit": 12.0,
+                "stop_loss": 8.0,
+                "volume": 1,
+            }
+        )
+    )
+    asyncio.run(
+        service.create_position(
+            {
+                "mobile": "0915",
+                "side": "buy",
+                "entry_type": "market",
+                "entry_price": 10.0,
+                "take_profit": 12.0,
+                "stop_loss": 8.0,
+                "volume": 1,
+            }
+        )
+    )
 
     records = service.all_records()
     assert records["count_users"] >= 2
