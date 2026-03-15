@@ -14,11 +14,8 @@ class Config:
     ROOM_WORKER_HOST: str = os.getenv("ROOM_WORKER_HOST", "0.0.0.0")
     ROOM_WORKER_PORT: int = int(os.getenv("ROOM_WORKER_PORT", "8005"))
 
-    # Redis Configuration
-    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
-    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
-    REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
-    REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
+    # Session cache configuration
+    SESSION_CACHE_FILE: str = os.getenv("SESSION_CACHE_FILE", "data/room_sessions.json")
 
     # Hivagold Configuration
     BASE_DOMAIN: str = os.getenv("BASE_DOMAIN", "http://hivagold.com")
@@ -27,9 +24,9 @@ class Config:
         os.getenv("ADD_DEFAULT_HEADERS", "true").lower() == "true"
     )
 
-    # Redis TTL Configuration
-    REDIS_LOGIN_DATA_TTL: int = int(
-        os.getenv("REDIS_LOGIN_DATA_TTL", str(14 * 24 * 60 * 60))
+    # Session cache TTL Configuration
+    SESSION_CACHE_TTL: int = int(
+        os.getenv("SESSION_CACHE_TTL", str(14 * 24 * 60 * 60))
     )  # 14 days
 
 

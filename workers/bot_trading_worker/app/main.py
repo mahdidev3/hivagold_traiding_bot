@@ -8,7 +8,6 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from config import get_config
 from .clients import build_clients
 from .logging_setup import setup_logger
-from .queue_manager import TradingQueueManager
 from .schemas import (
     HealthResponse,
     LatestSignalsResponse,
@@ -24,18 +23,15 @@ logger: Logger = setup_logger(config)
 
 redis_client, market_client = build_clients(config)
 trading_service = TradingWorkerService(config, redis_client, market_client, logger)
-queue_manager = TradingQueueManager(trading_service, logger)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Trading Worker started")
-    await queue_manager.start()
     if config.AUTO_START:
         await trading_service.start()
     yield
     await trading_service.stop()
-    await queue_manager.stop()
     logger.info("Trading Worker stopped")
 
 
@@ -61,7 +57,7 @@ async def health():
 async def process_request(payload: ProcessTradingRequest):
     try:
         logger.debug("Received process trading request")
-        result = await queue_manager.enqueue(payload.model_dump())
+        result = await trading_service.process(payload.model_dump())
         return _http_from_result(result)
     except HTTPException:
         raise
