@@ -43,31 +43,31 @@ from .service import (
 config = get_config()
 logger: Logger = setup_logger(config)
 
-redis_client, portfolio_client, orders_client = build_clients(config, logger)
+session_store, portfolio_client, orders_client = build_clients(config, logger)
 
 get_portfolios_service = GetPortfoliosService(
-    config, portfolio_client, redis_client, logger
+    config, portfolio_client, session_store, logger
 )
 create_active_portfolio_service = CreateActivePortfolioService(
-    config, portfolio_client, redis_client, logger
+    config, portfolio_client, session_store, logger
 )
-get_orders_service = GetOrdersService(config, orders_client, redis_client, logger)
-create_order_service = CreateOrderService(config, orders_client, redis_client, logger)
-close_order_service = CloseOrderService(config, orders_client, redis_client, logger)
+get_orders_service = GetOrdersService(config, orders_client, session_store, logger)
+create_order_service = CreateOrderService(config, orders_client, session_store, logger)
+close_order_service = CloseOrderService(config, orders_client, session_store, logger)
 get_transactions_service = GetTransactionsService(
-    config, portfolio_client, redis_client, logger
+    config, portfolio_client, session_store, logger
 )
 close_transaction_service = CloseTransactionService(
-    config, portfolio_client, redis_client, logger
+    config, portfolio_client, session_store, logger
 )
 close_portfolio_service = ClosePortfolioService(
     config,
     portfolio_client,
     orders_client,
-    redis_client,
+    session_store,
     logger,
 )
-check_room_status_service = CheckRoomStatusService(config, redis_client, logger)
+check_room_status_service = CheckRoomStatusService(config, session_store, logger)
 
 room_worker_service = RoomWorkerService(
     get_portfolios_service=get_portfolios_service,
