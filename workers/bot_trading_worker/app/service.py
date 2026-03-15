@@ -171,7 +171,7 @@ class TradingWorkerService:
         try:
             await asyncio.to_thread(
                 self.redis_client.publish_event,
-                self.config.REDIS_MARKET_EVENT_CHANNEL,
+                self.config.MARKET_EVENT_CHANNEL,
                 {"event": "signal", "payload": signal},
             )
         except Exception as exc:
@@ -188,7 +188,7 @@ class TradingWorkerService:
         try:
             await asyncio.to_thread(
                 self.redis_client.publish_event,
-                self.config.REDIS_MARKET_EVENT_CHANNEL,
+                self.config.MARKET_EVENT_CHANNEL,
                 event,
             )
         except Exception as exc:

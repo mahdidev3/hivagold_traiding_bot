@@ -14,11 +14,8 @@ class Config:
     DATABASE_PATH: str = os.getenv("DATABASE_PATH", "portfolio_worker.db")
     BOT_API_KEY: str = os.getenv("BOT_API_KEY", "change-me")
 
-    REDIS_HOST: str = os.getenv("REDIS_HOST", "redis")
-    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
-    REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
-    REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
-    REDIS_MARKET_EVENT_CHANNEL: str = os.getenv("REDIS_MARKET_EVENT_CHANNEL", "bot.market.events")
+    MARKET_EVENTS_FILE: str = os.getenv("MARKET_EVENTS_FILE", "data/market_events.jsonl")
+    REDIS_MARKET_EVENT_CHANNEL: str = os.getenv("MARKET_EVENT_CHANNEL", "bot.market.events")
 
 
 def get_config() -> Config:
