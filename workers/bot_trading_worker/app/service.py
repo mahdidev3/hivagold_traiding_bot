@@ -220,13 +220,13 @@ class TradingWorkerService:
     async def _run_user_session(self, user: UserContext) -> None:
         session_data = self.redis_client.get_session_data(user.mobile, user.domain)
         if not session_data or not isinstance(session_data, dict):
-            await self._publish_signal(self._error_signal(user, "Session not found/invalid in Redis for this mobile/domain"))
+            await self._publish_signal(self._error_signal(user, "Session not found/invalid in file storage for this mobile/domain"))
             await asyncio.sleep(5)
             return
 
         cookies = session_data.get("cookies") or {}
         if not isinstance(cookies, dict) or not cookies:
-            await self._publish_signal(self._error_signal(user, "Cookies are missing in Redis session"))
+            await self._publish_signal(self._error_signal(user, "Cookies are missing in stored user session"))
             await asyncio.sleep(5)
             return
 

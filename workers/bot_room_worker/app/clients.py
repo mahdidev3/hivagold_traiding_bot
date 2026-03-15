@@ -1,6 +1,6 @@
 import logging
+from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
-import redis
 import json
 import requests
 from urllib.parse import urlparse
@@ -55,114 +55,90 @@ def domain_key_candidates(domain: str) -> list[str]:
 
 
 class HivagoldRedisClient:
-    """
-    Redis client for storing and retrieving Hivagold session data (cookies and headers).
-    Similar to the one in bot_auth_worker.
-    """
+    """File-backed user session store compatible with existing room worker usage."""
 
-    def __init__(self, redis_pool: redis.ConnectionPool, logger: logging.Logger):
-        self.redis_pool = redis_pool
+    def __init__(self, users_root: str, logger: logging.Logger):
+        self.users_root = Path(users_root)
         self.logger = logger
 
-    def _redis_connection(self) -> redis.Redis:
-        return redis.Redis(connection_pool=self.redis_pool, decode_responses=True)
+    def _user_file(self, mobile: str) -> Path:
+        normalized_mobile = normalize_mobile(mobile) or (mobile or "").strip()
+        return self.users_root / normalized_mobile / "User_info.json"
+
+    def _read_user_info(self, mobile: str) -> dict[str, Any]:
+        file_path = self._user_file(mobile)
+        if not file_path.exists():
+            return {"sessions": {}}
+        try:
+            with file_path.open("r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (json.JSONDecodeError, OSError):
+            self.logger.warning("Corrupted user info file: %s", file_path)
+            return {"sessions": {}}
+        if not isinstance(data, dict):
+            return {"sessions": {}}
+        if not isinstance(data.get("sessions"), dict):
+            data["sessions"] = {}
+        return data
+
+    def _write_user_info(self, mobile: str, data: dict[str, Any]) -> None:
+        file_path = self._user_file(mobile)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with file_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
 
     def save_session_data(
         self, mobile: str, session_data: Dict[str, Any], base_domain: str, ttl: int
     ) -> bool:
-        """
-        Save session data (cookies, headers) in Redis as JSON.
-
-        Args:
-            mobile: User mobile number
-            session_data: Dictionary containing cookies and headers
-            base_domain: Base domain for the key
-            ttl: Time to live in seconds
-
-        Returns:
-            Boolean indicating success
-        """
-        try:
-            conn = self._redis_connection()
-            serialized = json.dumps(session_data)
-            normalized_mobile = normalize_mobile(mobile)
-            normalized_domain = normalize_domain_key(base_domain)
-            result = conn.setex(
-                f"{normalized_domain}:{normalized_mobile}", ttl, serialized
-            )
-            self.logger.info(f"Saved session data for {mobile} in Redis")
-            return bool(result)
-        except Exception as e:
-            self.logger.error(f"Failed to save session data in Redis: {str(e)}")
-            return False
+        normalized_domain = normalize_domain_key(base_domain)
+        user_info = self._read_user_info(mobile)
+        user_info.setdefault("sessions", {})
+        user_info["sessions"][normalized_domain] = {
+            "cookies": (session_data or {}).get("cookies", {}),
+            "headers": (session_data or {}).get("headers", {}),
+        }
+        self._write_user_info(mobile, user_info)
+        self.logger.debug(
+            "Saved session data in file for domain=%s mobile=%s ttl=%s",
+            normalized_domain,
+            normalize_mobile(mobile),
+            ttl,
+        )
+        return True
 
     def get_session_data(
         self, mobile: str, base_domain: str
     ) -> Optional[Dict[str, Any]]:
-        """
-        Retrieve session data from Redis.
-
-        Args:
-            mobile: User mobile number
-            base_domain: Base domain for the key
-
-        Returns:
-            Dictionary containing session data or None if not found
-        """
-        try:
-            conn = self._redis_connection()
-            normalized_mobile = normalize_mobile(mobile)
-            mobile_candidates = [normalized_mobile, (mobile or "").strip()]
-            for domain_candidate in domain_key_candidates(base_domain):
-                for mobile_candidate in mobile_candidates:
-                    if not mobile_candidate:
-                        continue
-                    redis_key = f"{domain_candidate}:{mobile_candidate}"
-                    self.logger.info(redis_key)
-                    data = conn.get(redis_key)
-                    if not data:
-                        continue
-                    session_data = json.loads(data)
-                    self.logger.debug(f"Retrieved session data for {mobile} from Redis")
-                    return session_data
-            self.logger.debug(f"No session data found for {mobile} in Redis")
-            return None
-        except Exception as e:
-            self.logger.error(f"Failed to retrieve session data from Redis: {str(e)}")
-            return None
+        user_info = self._read_user_info(mobile)
+        sessions = user_info.get("sessions") or {}
+        for domain_candidate in domain_key_candidates(base_domain):
+            data = sessions.get(domain_candidate)
+            if isinstance(data, dict):
+                self.logger.debug(
+                    "Loaded user session from file for domain=%s mobile=%s",
+                    domain_candidate,
+                    normalize_mobile(mobile),
+                )
+                return data
+        self.logger.debug(
+            "No file-based session data found for domain=%s mobile=%s",
+            base_domain,
+            normalize_mobile(mobile),
+        )
+        return None
 
     def delete_session_data(self, mobile: str, base_domain: str) -> bool:
-        """
-        Delete session data from Redis.
-
-        Args:
-            mobile: User mobile number
-            base_domain: Base domain for the key
-
-        Returns:
-            Boolean indicating success
-        """
-        try:
-            conn = self._redis_connection()
-            normalized_mobile = normalize_mobile(mobile)
-            mobile_candidates = [normalized_mobile, (mobile or "").strip()]
-            redis_keys: list[str] = []
-            for domain_candidate in domain_key_candidates(base_domain):
-                for mobile_candidate in mobile_candidates:
-                    if mobile_candidate:
-                        redis_keys.append(f"{domain_candidate}:{mobile_candidate}")
-            unique_keys: list[str] = []
-            for key in redis_keys:
-                if key not in unique_keys:
-                    unique_keys.append(key)
-            if not unique_keys:
-                return False
-            result = conn.delete(*unique_keys)
-            self.logger.info(f"Deleted session data for {mobile} from Redis")
-            return bool(result)
-        except Exception as e:
-            self.logger.error(f"Failed to delete session data from Redis: {str(e)}")
-            return False
+        user_info = self._read_user_info(mobile)
+        sessions = user_info.get("sessions") or {}
+        deleted_count = 0
+        for domain_candidate in domain_key_candidates(base_domain):
+            if domain_candidate in sessions:
+                del sessions[domain_candidate]
+                deleted_count += 1
+        if deleted_count:
+            user_info["sessions"] = sessions
+            self._write_user_info(mobile, user_info)
+        return bool(deleted_count)
 
 
 class PortfolioClient:
@@ -856,14 +832,7 @@ def build_clients(
     Returns:
         Tuple containing (redis_client, portfolio_client, orders_client)
     """
-    redis_pool = redis.ConnectionPool(
-        host=config.REDIS_HOST,
-        port=config.REDIS_PORT,
-        db=config.REDIS_DB,
-        password=config.REDIS_PASSWORD,
-        decode_responses=True,
-    )
-    redis_client = HivagoldRedisClient(redis_pool, logger)
+    redis_client = HivagoldRedisClient(config.USERS_STORAGE_DIR, logger)
     portfolio_client = PortfolioClient(redis_client, config, logger)
     orders_client = OrdersClient(redis_client, config, logger)
 
