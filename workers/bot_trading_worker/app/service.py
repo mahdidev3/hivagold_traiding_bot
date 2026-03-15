@@ -69,7 +69,18 @@ class TradingWorkerService:
         return (file_path.parent.parent / path.name).resolve()
 
     def _load_bots(self) -> list[BotThreadConfig]:
-        data = json.loads(self._users_path().read_text(encoding="utf-8"))
+        users_path = self._users_path()
+        if not users_path.exists():
+            self.logger.info("Users config file not found: %s", users_path)
+            return []
+        try:
+            data = json.loads(users_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            self.logger.warning("Invalid users config JSON in %s", users_path)
+            return []
+        if not isinstance(data, list):
+            self.logger.warning("Users config root is not a list in %s", users_path)
+            return []
         bots: list[BotThreadConfig] = []
         for item in data:
             if not isinstance(item, dict):
