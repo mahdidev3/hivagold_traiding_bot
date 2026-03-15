@@ -1,18 +1,17 @@
 # Bot Simulator Worker
 
-File-based portfolio simulator service (no database).
+File-based portfolio simulator service (no external DB dependency).
 
 ## Features
 
-- Create/update/close user positions.
-- Persist user simulator history under auth user storage.
-- Compute per-user stats (pnl/win-rate).
-- Aggregate strategy-level closed pnl.
-- Background websocket price feed updates open positions.
+- Create/update/close simulated positions.
+- Keep per-user history/stats.
+- Aggregate PnL by strategy.
+- Background market price processing for open positions.
 
 ## Auth
 
-All endpoints except `/health` require header:
+All endpoints except `/health` require:
 
 ```http
 x-api-key: <BOT_API_KEY>
