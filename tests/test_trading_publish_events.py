@@ -30,9 +30,8 @@ async def _run_test_event_publish():
     service = TradingWorkerService(DummyConfig(), DummySessionStore(), DummyMarket(), DummyExec())
     event = {"domain": "d", "mobile": "m", "event": "price", "payload": {"price": 1}}
     await service._publish_event(event)
-    latest = service.latest_signals()
-    assert len(latest) == 1
-    assert latest[0]["payload"]["price"] == 1
+    assert len(service._latest_events) == 1
+    assert list(service._latest_events.values())[0]["payload"]["price"] == 1
 
 
 def test_publish_event_updates_latest_event_cache():

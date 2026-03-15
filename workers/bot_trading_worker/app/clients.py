@@ -255,6 +255,19 @@ class TradingExecutionClient:
     def create_order(self, *, run_mode: str, session: requests.Session, domain: str, payload: dict[str, Any]) -> dict[str, Any]:
         return self._request("POST", self._create_order_url(run_mode, domain), session, payload)
 
+
+    def update_order(self, *, run_mode: str, session: requests.Session, domain: str, order_id: int | str, payload: dict[str, Any]) -> dict[str, Any]:
+        if run_mode == "simulator":
+            mobile = payload_mobile(session)
+            if not mobile:
+                raise ValueError("mobile header is required for simulator update")
+            url = f"{self.config.SIMULATOR_WORKER_URL}/portfolio/users/{mobile}/positions/{order_id}"
+            return self._request("PATCH", url, session, payload, include_api_key=True)
+        update_url = f"{normalize_base_url(domain)}{self.config.ROOM_PREFIX}/api/order/update/"
+        body = dict(payload)
+        body["order_id"] = order_id
+        return self._request("POST", update_url, session, body)
+
     def close_order(self, *, run_mode: str, session: requests.Session, domain: str, order_id: int | str, close_price: float | None = None, reason: str | None = None) -> dict[str, Any]:
         if run_mode == "simulator":
             mobile = payload_mobile(session)

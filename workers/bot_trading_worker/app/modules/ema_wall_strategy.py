@@ -4,7 +4,7 @@ import math
 from typing import Any
 
 from config import Config
-from .base import MarketSnapshot
+from .base import MarketSnapshot, StrategyAction, StrategyContext
 
 
 class EmaWallStrategyModule:
@@ -13,7 +13,64 @@ class EmaWallStrategyModule:
     def __init__(self, config: Config):
         self.config = config
 
+    def on_market_update(self, snapshot: MarketSnapshot, context: StrategyContext) -> list[StrategyAction]:
+        assessment = self._assess(snapshot)
+        recommendation = assessment.get("recommendation")
+        if not recommendation:
+            return []
+
+        actions: list[StrategyAction] = []
+        order_payload = {
+            "mobile": context.mobile,
+            "domain": context.domain,
+            "room": context.room,
+            "portfolio_id": context.portfolio_id,
+            "strategy": self.name,
+            "action": recommendation["action"],
+            "order_type": recommendation["ordertype"],
+            "price": recommendation["price"],
+            "units": recommendation["units"],
+            "stop_loss": recommendation["stop_loss"],
+            "take_profit": recommendation["take_profit"],
+        }
+        actions.append(
+            StrategyAction(
+                operation="create_order",
+                payload=order_payload,
+                reason="strategy_signal",
+            )
+        )
+
+        open_orders = context.open_orders or []
+        for order in open_orders:
+            if order.get("status") in {"open", "pending"}:
+                update_payload = {
+                    "mobile": context.mobile,
+                    "domain": context.domain,
+                    "room": context.room,
+                    "portfolio_id": context.portfolio_id,
+                    "strategy": self.name,
+                    "order_id": order.get("id") or order.get("position_id"),
+                    "stop_loss": recommendation["stop_loss"],
+                    "take_profit": recommendation["take_profit"],
+                }
+                actions.append(
+                    StrategyAction(
+                        operation="update_order",
+                        payload=update_payload,
+                        reason="refresh_risk_levels",
+                    )
+                )
+
+        return actions
+
     def evaluate(self, snapshot: MarketSnapshot, base_payload: dict[str, Any]) -> dict[str, Any]:
+        result = dict(base_payload)
+        result.update(self._assess(snapshot))
+        result["strategy"] = self.name
+        return result
+
+    def _assess(self, snapshot: MarketSnapshot) -> dict[str, Any]:
         bars = snapshot.bars
         closes = [bar["close"] for bar in bars]
         highs = [bar["high"] for bar in bars]
@@ -68,29 +125,24 @@ class EmaWallStrategyModule:
             }
             status = "signal"
 
-        result = dict(base_payload)
-        result.update(
-            {
-                "status": status,
-                "bias": bias,
-                "score": round(score, 3),
-                "confidence": round(confidence, 3),
-                "reasons": reasons,
-                "recommendation": recommendation,
-                "metrics": {
-                    "now_price": round(now_price, 5),
-                    "ema9": round(ema9, 5),
-                    "ema21": round(ema21, 5),
-                    "ema50": round(ema50, 5),
-                    "atr14": round(atr14, 5),
-                    "spread": round(float(spread), 5),
-                    "imbalance": wall.get("imbalance"),
-                },
-                "error": snapshot.last_error,
-                "strategy": self.name,
-            }
-        )
-        return result
+        return {
+            "status": status,
+            "bias": bias,
+            "score": round(score, 3),
+            "confidence": round(confidence, 3),
+            "reasons": reasons,
+            "recommendation": recommendation,
+            "metrics": {
+                "now_price": round(now_price, 5),
+                "ema9": round(ema9, 5),
+                "ema21": round(ema21, 5),
+                "ema50": round(ema50, 5),
+                "atr14": round(atr14, 5),
+                "spread": round(float(spread), 5),
+                "imbalance": wall.get("imbalance"),
+            },
+            "error": snapshot.last_error,
+        }
 
     def _ema(self, values: list[float], period: int) -> float:
         alpha = 2.0 / (period + 1.0)

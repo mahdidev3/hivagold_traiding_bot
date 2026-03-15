@@ -51,9 +51,6 @@ def test_api_server_service_routes_to_workers():
     assert login_result["success"] is True
     assert auth.calls[-1][1] == "/login"
 
-    signal_result = service.execute("get_signals", {})
-    assert signal_result["path"] == "/signals/latest"
-
     portfolio_result = service.execute("create_portfolio", {"mobile": "0912"})
     assert portfolio_result["path"] == "/room/portfolio/create"
     assert room.calls[-1][0] == "post"

@@ -1,22 +1,25 @@
 # Bot Trading Worker
 
-Trading runtime service for running per-user strategy bots and streaming bot events.
+Trading runtime service for running strategy instances per active user-room portfolio.
 
 ## Responsibilities
 
 - Loads bot definitions from `users.json`.
+- Starts one runtime loop per active bot (one bot = one user + one room).
 - Opens market data streams (`live-bars`, `price`, `wall`) for each active bot.
-- Runs strategy logic per active bot task context.
+- Activates the configured strategy for that user-room and lets it manage order lifecycle.
+- Strategy is responsible for:
+  - creating orders,
+  - updating existing orders,
+  - closing orders,
+  - creating multiple orders on the same portfolio when needed.
 - Sends bot-mode orders to simulator when `run_mode=simulator`.
-- Publishes internal bot events to HTTP + WebSocket consumers.
 
-## HTTP / WebSocket API
+## HTTP API
 
 - `GET /health`
 - `POST /trading/process`
   - Supported actions: `start`, `stop`, `status`, `list_bots`, `activate_bot`, `deactivate_bot`
-- `GET /signals/latest`
-- `WS /signals/ws`
 
 ## `POST /trading/process` payload shape
 
@@ -42,7 +45,9 @@ Trading runtime service for running per-user strategy bots and streaming bot eve
     "room": "xag",
     "run_mode": "simulator",
     "active": true,
-    "metadata": {}
+    "metadata": {
+      "portfolio_id": "optional-portfolio-id"
+    }
   }
 ]
 ```

@@ -86,8 +86,6 @@ class ApiServerService:
             return self.auth_client.post("/logout", self._prepare_auth_payload(payload))
         if action == "create_portfolio":
             return self.room_client.post("/room/portfolio/create", payload)
-        if action == "get_signals":
-            return self.trading_client.get("/signals/latest")
         if action == "check_room_status":
             return self.room_status(
                 payload["mobile"], payload.get("base_domain"), payload.get("market")
