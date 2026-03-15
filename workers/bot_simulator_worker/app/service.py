@@ -19,6 +19,10 @@ class SimulatorWorkerService:
         self._lock = asyncio.Lock()
         self._running = False
         self._ws_tasks: dict[str, asyncio.Task] = {}
+        self._json_cache: dict[Path, tuple[float, Any]] = {}
+        self._history_cache: dict[str, dict[str, Any]] = {}
+        self._history_last_flush_ts: dict[str, float] = {}
+        self._history_flush_interval_seconds = max(float(getattr(config, "SIMULATOR_HISTORY_FLUSH_INTERVAL_SECONDS", 1.0)), 0.1)
 
     async def start(self):
         self._running = True
@@ -33,6 +37,7 @@ class SimulatorWorkerService:
             except BaseException:
                 pass
         self._ws_tasks.clear()
+        self._flush_all_history()
 
     def _normalize_mobile(self, mobile: str) -> str:
         value = "".join(ch for ch in (mobile or "").strip() if ch.isdigit())
@@ -61,25 +66,48 @@ class SimulatorWorkerService:
     def _read_json(self, path: Path, default: Any) -> Any:
         if not path.exists():
             return default
+        stat = path.stat()
+        cached = self._json_cache.get(path)
+        if cached and cached[0] == stat.st_mtime:
+            return cached[1]
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
+            data = json.loads(path.read_text(encoding="utf-8"))
         except Exception:
             return default
+        self._json_cache[path] = (stat.st_mtime, data)
+        return data
 
     def _write_json(self, path: Path, data: Any) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        self._json_cache[path] = (path.stat().st_mtime, data)
 
     def _load_history(self, mobile: str) -> dict[str, Any]:
-        data = self._read_json(self._history_file(mobile), {"positions": [], "last_price": None})
+        normalized_mobile = self._normalize_mobile(mobile)
+        cached = self._history_cache.get(normalized_mobile)
+        if cached is not None:
+            return cached
+        data = self._read_json(self._history_file(normalized_mobile), {"positions": [], "last_price": None})
         if not isinstance(data, dict):
-            return {"positions": [], "last_price": None}
+            data = {"positions": [], "last_price": None}
         if not isinstance(data.get("positions"), list):
             data["positions"] = []
+        self._history_cache[normalized_mobile] = data
         return data
 
-    def _save_history(self, mobile: str, data: dict[str, Any]) -> None:
-        self._write_json(self._history_file(mobile), data)
+    def _save_history(self, mobile: str, data: dict[str, Any], *, force: bool = False) -> None:
+        normalized_mobile = self._normalize_mobile(mobile)
+        self._history_cache[normalized_mobile] = data
+        now = asyncio.get_running_loop().time()
+        last_flush = self._history_last_flush_ts.get(normalized_mobile, 0.0)
+        if force or (now - last_flush) >= self._history_flush_interval_seconds:
+            self._write_json(self._history_file(normalized_mobile), data)
+            self._history_last_flush_ts[normalized_mobile] = now
+
+    def _flush_all_history(self) -> None:
+        for mobile, data in self._history_cache.items():
+            self._write_json(self._history_file(mobile), data)
+            self._history_last_flush_ts[mobile] = asyncio.get_event_loop().time()
 
     def _now(self) -> str:
         return datetime.now(timezone.utc).isoformat()
@@ -161,7 +189,7 @@ class SimulatorWorkerService:
                 "updated_at": now,
             }
             positions.append(pos)
-            self._save_history(mobile, history)
+            self._save_history(mobile, history, force=True)
         self.logger.info("[SIMULATOR] position created mobile=%s id=%s side=%s", mobile, next_id, pos["side"])
         await self._ensure_price_stream(mobile, payload.get("domain"))
         return pos
@@ -179,7 +207,7 @@ class SimulatorWorkerService:
                     if payload.get(field) is not None:
                         pos[field] = float(payload[field])
                 pos["updated_at"] = self._now()
-                self._save_history(mobile, history)
+                self._save_history(mobile, history, force=True)
                 self.logger.info("[SIMULATOR] position updated mobile=%s id=%s", mobile, position_id)
                 return pos
         raise ValueError("position not found")
@@ -203,7 +231,7 @@ class SimulatorWorkerService:
                 pos["closed_reason"] = reason or "manual"
                 pos["pnl"] = self._calc_pnl(pos["side"], float(pos["opened_price"]), float(price), float(pos.get("volume") or 1.0))
                 pos["updated_at"] = self._now()
-                self._save_history(mobile, history)
+                self._save_history(mobile, history, force=True)
                 self.logger.info("[SIMULATOR] position closed mobile=%s id=%s pnl=%s", mobile, position_id, pos["pnl"])
                 return pos
         raise ValueError("position not found")
@@ -250,7 +278,7 @@ class SimulatorWorkerService:
                         pos["updated_at"] = self._now()
                         closed += 1
                         self.logger.info("[SIMULATOR] position auto closed mobile=%s id=%s reason=%s pnl=%s source=%s", mobile, pos.get("id"), hit_reason, pos.get("pnl"), source)
-            self._save_history(mobile, history)
+            self._save_history(mobile, history, force=bool(entered or closed))
         return {"mobile": self._normalize_mobile(mobile), "price": float(price), "entered": entered, "closed": closed, "symbol": symbol_value, "source": source}
 
     def user_history(self, mobile: str) -> dict[str, Any]:
