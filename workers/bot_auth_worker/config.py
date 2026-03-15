@@ -40,11 +40,8 @@ class Config:
     AUTH_WORKER_PORT: int = int(os.getenv("AUTH_WORKER_PORT", "8002"))
     AUTH_WORKER_HOST: str = os.getenv("AUTH_WORKER_HOST", "0.0.0.0")
 
-    REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
-    REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
-    REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
-    REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
-    REDIS_TTL: int = int(os.getenv("REDIS_TTL", "432000"))  # 5 days in seconds
+    USERS_STORAGE_DIR: str = os.getenv("USERS_STORAGE_DIR", "./Users")
+    SESSION_TTL_SECONDS: int = int(os.getenv("SESSION_TTL_SECONDS", "432000"))
 
     ADD_DEFAULT_HEADERS: bool = (
         os.getenv("ADD_DEFAULT_HEADERS", "true").lower() == "true"

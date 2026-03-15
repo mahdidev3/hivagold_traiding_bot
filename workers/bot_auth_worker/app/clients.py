@@ -1,9 +1,9 @@
 import logging
 import time
 from typing import Any, Optional, Tuple
-import redis
 import json
 import requests
+from pathlib import Path
 from urllib.parse import urlparse
 from config import Config
 
@@ -310,85 +310,94 @@ class CaptchaWorkerClient:
         ) from last_exc
 
 
-class RedisClient:
-    """
-    Redis wrapper that receives a Redis connection pool.
-    """
+class UserSessionStore:
+    """File-based session storage under projectroot/Users/<mobile>/User_info.json."""
 
-    def __init__(self, redis_pool: redis.ConnectionPool, logger: logging.Logger):
-        self.redis_pool = redis_pool
+    def __init__(self, users_root: str, logger: logging.Logger):
+        self.users_root = Path(users_root)
         self.logger = logger
 
-    def _redis_connection(self) -> redis.Redis:
-        return redis.Redis(connection_pool=self.redis_pool, decode_responses=True)
+    def _user_file(self, mobile: str) -> Path:
+        normalized_mobile = normalize_mobile(mobile) or (mobile or "").strip()
+        return self.users_root / normalized_mobile / "User_info.json"
+
+    def _read_user_info(self, mobile: str) -> dict[str, Any]:
+        file_path = self._user_file(mobile)
+        if not file_path.exists():
+            return {"sessions": {}}
+        try:
+            with file_path.open("r", encoding="utf-8") as handle:
+                data = json.load(handle)
+        except (json.JSONDecodeError, OSError):
+            self.logger.warning("Corrupted user info file: %s", file_path)
+            return {"sessions": {}}
+        if not isinstance(data, dict):
+            return {"sessions": {}}
+        sessions = data.get("sessions")
+        if not isinstance(sessions, dict):
+            data["sessions"] = {}
+        return data
+
+    def _write_user_info(self, mobile: str, data: dict[str, Any]) -> None:
+        file_path = self._user_file(mobile)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        with file_path.open("w", encoding="utf-8") as handle:
+            json.dump(data, handle, ensure_ascii=False, indent=2)
 
     def save_login_data(
         self, mobile: str, login_data: Any, domain: str, ttl: int
     ) -> bool:
-        """
-        Save login session data (cookies, headers) in Redis as JSON.
-        ttl default = 14 days
-        """
-        conn = self._redis_connection()
-        serialized = json.dumps(login_data)
-        normalized_mobile = normalize_mobile(mobile)
         normalized_domain = normalize_domain_key(domain)
+        user_info = self._read_user_info(mobile)
+        user_info.setdefault("sessions", {})
+        user_info["sessions"][normalized_domain] = {
+            "cookies": (login_data or {}).get("cookies", {}),
+            "headers": (login_data or {}).get("headers", {}),
+        }
+        self._write_user_info(mobile, user_info)
         self.logger.debug(
-            "Saving login data in redis key=%s:%s ttl=%s",
+            "Saved login data in file for domain=%s mobile=%s ttl=%s",
             normalized_domain,
-            normalized_mobile,
+            normalize_mobile(mobile),
             ttl,
         )
-        return bool(
-            conn.setex(f"{normalized_domain}:{normalized_mobile}", ttl, serialized)
-        )
+        return True
 
     def get_login_data(self, mobile: str, domain: str) -> Optional[dict]:
-        conn = self._redis_connection()
-        normalized_mobile = normalize_mobile(mobile)
-        mobile_candidates = [normalized_mobile, (mobile or "").strip()]
+        user_info = self._read_user_info(mobile)
+        sessions = user_info.get("sessions") or {}
         for domain_candidate in domain_key_candidates(domain):
-            for mobile_candidate in mobile_candidates:
-                if not mobile_candidate:
-                    continue
-                redis_key = f"{domain_candidate}:{mobile_candidate}"
-                self.logger.info(redis_key)
-                data = conn.get(redis_key)
-                if not data:
-                    continue
-                try:
-                    parsed = json.loads(data)
-                    self.logger.debug("Loaded redis login data for key=%s", redis_key)
-                    return parsed
-                except json.JSONDecodeError as exc:
-                    raise exc
+            data = sessions.get(domain_candidate)
+            if isinstance(data, dict):
+                self.logger.debug(
+                    "Loaded user session from file for domain=%s mobile=%s",
+                    domain_candidate,
+                    normalize_mobile(mobile),
+                )
+                return data
         self.logger.debug(
-            "No redis login data found for domain=%s mobile=%s", domain, mobile
+            "No file-based login data found for domain=%s mobile=%s", domain, mobile
         )
         return None
 
     def delete_login_data(self, mobile: str, domain: str) -> int:
-        conn = self._redis_connection()
-        normalized_mobile = normalize_mobile(mobile)
-        mobile_candidates = [normalized_mobile, (mobile or "").strip()]
-        redis_keys: list[str] = []
+        user_info = self._read_user_info(mobile)
+        sessions = user_info.get("sessions") or {}
+        deleted_count = 0
         for domain_candidate in domain_key_candidates(domain):
-            for mobile_candidate in mobile_candidates:
-                if mobile_candidate:
-                    redis_keys.append(f"{domain_candidate}:{mobile_candidate}")
-        unique_keys: list[str] = []
-        for key in redis_keys:
-            if key not in unique_keys:
-                unique_keys.append(key)
-        if not unique_keys:
-            return 0
-        return int(conn.delete(*unique_keys))
+            if domain_candidate in sessions:
+                del sessions[domain_candidate]
+                deleted_count += 1
+        if deleted_count:
+            user_info["sessions"] = sessions
+            self._write_user_info(mobile, user_info)
+        return deleted_count
 
 
 def build_clients(
     config: Config,
     logger: logging.Logger,
-) -> Tuple[MainApiClient, CaptchaWorkerClient, RedisClient]:
+) -> Tuple[MainApiClient, CaptchaWorkerClient, UserSessionStore]:
     """
     Build service clients from environment variables.
     """
@@ -396,22 +405,10 @@ def build_clients(
     captcha_timeout = config.CAPTCHA_WORKER_TIMEOUT_SECONDS
     captcha_retries = config.CAPTCHA_WORKER_MAX_RETRIES
 
-    redis_host = config.REDIS_HOST
-    redis_port = config.REDIS_PORT
-    redis_db = config.REDIS_DB
-    redis_password = config.REDIS_PASSWORD.strip() or None
-
-    redis_pool = redis.ConnectionPool(
-        host=redis_host,
-        port=redis_port,
-        db=redis_db,
-        password=redis_password,
-        decode_responses=True,
-    )
     return (
         MainApiClient(config, logger),
         CaptchaWorkerClient(
             captcha_solve_url, logger, captcha_timeout, captcha_retries
         ),
-        RedisClient(redis_pool, logger),
+        UserSessionStore(config.USERS_STORAGE_DIR, logger),
     )

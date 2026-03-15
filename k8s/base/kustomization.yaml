@@ -5,7 +5,6 @@ resources:
   - namespace.yaml
   - configmap.yaml
   - secret.yaml
-  - redis.yaml
   - bot-captcha-worker.yaml
   - bot-auth-worker.yaml
   - bot-room-worker.yaml
