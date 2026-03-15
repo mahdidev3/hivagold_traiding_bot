@@ -18,6 +18,12 @@ class Config:
     WS_PRICE_PATH: str = os.getenv("WS_PRICE_PATH", "/xag/ws/xag/price/")
     PRICE_WS_SUBSCRIBE_MESSAGE: str = os.getenv("PRICE_WS_SUBSCRIBE_MESSAGE", '{"action":"SubAdd","subs":["0~hivagold~xag~gold"]}')
     PRICE_WS_SYMBOL: str = os.getenv("PRICE_WS_SYMBOL", "xag")
+    HELPER_WS_URL: str = os.getenv("HELPER_WS_URL", "ws://localhost:8010/ws/price")
+    HELPER_SYMBOL: str = os.getenv("HELPER_SYMBOL", "xag")
+    HELPER_CANDLE_MOVE_THRESHOLD: float = float(os.getenv("HELPER_CANDLE_MOVE_THRESHOLD", "1.5"))
+    ORDER_TOLERANCE_MAX: float = float(os.getenv("ORDER_TOLERANCE_MAX", "5"))
+    STOP_TOLERANCE_MAX: float = float(os.getenv("STOP_TOLERANCE_MAX", "2"))
+    BARS_API_PATH: str = os.getenv("BARS_API_PATH", "/xag/api/xag-bars/")
 
 
 def get_config() -> Config:

@@ -11,6 +11,7 @@ from .schemas import (
     PositionCreateRequest,
     PositionUpdateRequest,
     PriceTickRequest,
+    StrategyTaskRequest,
 )
 from .service import SimulatorWorkerService
 
@@ -77,6 +78,11 @@ async def price_tick(payload: dict, _=Depends(require_api_key)):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@app.get("/portfolio/users/{mobile}/pnl", response_model=GenericResultResponse)
+async def user_pnl(mobile: str, _=Depends(require_api_key)):
+    return {"success": True, "result": service.user_stats(mobile)}
+
+
 @app.get("/portfolio/users/{mobile}/stats", response_model=GenericResultResponse)
 async def user_stats(mobile: str, _=Depends(require_api_key)):
     return {"success": True, "result": service.user_stats(mobile)}
@@ -87,21 +93,26 @@ async def user_history(mobile: str, _=Depends(require_api_key)):
     return {"success": True, "result": service.user_history(mobile)}
 
 
+@app.post("/strategy/tasks", response_model=GenericResultResponse)
+async def create_task(payload: StrategyTaskRequest, _=Depends(require_api_key)):
+    result = await service.create_strategy_task(payload.model_dump())
+    return {"success": True, "result": result}
+
+
+@app.delete("/strategy/tasks/{task_id}", response_model=GenericResultResponse)
+async def delete_task(task_id: str, _=Depends(require_api_key)):
+    result = await service.close_strategy_task(task_id)
+    return {"success": True, "result": result}
+
+
+@app.get("/strategy/tasks", response_model=GenericResultResponse)
+async def list_tasks(_=Depends(require_api_key)):
+    return {"success": True, "result": {"tasks": service.list_tasks()}}
+
+
 @app.get("/portfolio/db/records", response_model=GenericResultResponse)
 async def db_records(_=Depends(require_api_key)):
     return {"success": True, "result": service.all_records()}
-
-
-@app.get("/portfolio/strategies/{strategy}/pnl-positions", response_model=GenericResultResponse)
-async def strategy_positions(strategy: str, _=Depends(require_api_key)):
-    records = service.all_records()
-    matched = []
-    for mobile, user_data in records.get("users", {}).items():
-        for pos in user_data.get("history", {}).get("positions", []):
-            if pos.get("strategy") == strategy:
-                matched.append(pos)
-    total_pnl = sum(float(p.get("pnl") or 0) for p in matched if p.get("status") == "closed")
-    return {"success": True, "result": {"strategy": strategy, "positions": matched, "total_pnl": round(total_pnl, 4)}}
 
 
 @app.get("/portfolio/admin/db", response_model=GenericResultResponse)

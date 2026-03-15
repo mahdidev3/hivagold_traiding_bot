@@ -7,18 +7,12 @@ data:
   ENVIRONMENT: development
   APP_VERSION: "1.0.0"
 
-  # Service discovery (internal cluster DNS)
   AUTH_WORKER_URL: http://bot-auth-worker:8002
-  ROOM_WORKER_URL: http://bot-room-worker:8005
   TRADING_WORKER_URL: http://bot-trading-worker:8006
+  PORTFOLIO_WORKER_URL: http://bot-simulator-worker:8007
   CAPTCHA_SOLVE_URL: http://bot-captcha-worker:8001/solve
 
-  # Redis
-  REDIS_HOST: redis
-  REDIS_PORT: "6379"
-  REDIS_DB: "0"
-
-  # Domain defaults (override for your real environment)
   BASE_DOMAIN: https://hivagold.com
   DEFAULT_MARKET: xag
   HIVAGOLD_TENANT_ID: "11111"
+  USERS_STORAGE_DIR: ../bot_auth_worker/Users
