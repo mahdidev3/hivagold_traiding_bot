@@ -1,11 +1,11 @@
 import logging
 import time
 from typing import Any, Optional, Tuple
-import redis
 import json
 import requests
 from urllib.parse import urlparse
 from config import Config
+from workers.common_json_store import JsonCacheStore
 
 
 def normalize_mobile(mobile: str) -> str:
@@ -311,107 +311,60 @@ class CaptchaWorkerClient:
 
 
 class RedisClient:
-    """
-    Redis wrapper that receives a Redis connection pool.
-    """
+    """JSON-file backed cache for login session data."""
 
-    def __init__(self, redis_pool: redis.ConnectionPool, logger: logging.Logger):
-        self.redis_pool = redis_pool
+    def __init__(self, cache_store: JsonCacheStore, logger: logging.Logger):
+        self.cache_store = cache_store
         self.logger = logger
 
-    def _redis_connection(self) -> redis.Redis:
-        return redis.Redis(connection_pool=self.redis_pool, decode_responses=True)
-
-    def save_login_data(
-        self, mobile: str, login_data: Any, domain: str, ttl: int
-    ) -> bool:
-        """
-        Save login session data (cookies, headers) in Redis as JSON.
-        ttl default = 14 days
-        """
-        conn = self._redis_connection()
-        serialized = json.dumps(login_data)
+    def save_login_data(self, mobile: str, login_data: Any, domain: str, ttl: int) -> bool:
         normalized_mobile = normalize_mobile(mobile)
         normalized_domain = normalize_domain_key(domain)
-        self.logger.debug(
-            "Saving login data in redis key=%s:%s ttl=%s",
-            normalized_domain,
-            normalized_mobile,
-            ttl,
-        )
-        return bool(
-            conn.setex(f"{normalized_domain}:{normalized_mobile}", ttl, serialized)
-        )
+        key = f"{normalized_domain}:{normalized_mobile}"
+        self.logger.debug("Saving login data in json cache key=%s ttl=%s", key, ttl)
+        return self.cache_store.set(key, login_data, ttl)
 
     def get_login_data(self, mobile: str, domain: str) -> Optional[dict]:
-        conn = self._redis_connection()
         normalized_mobile = normalize_mobile(mobile)
         mobile_candidates = [normalized_mobile, (mobile or "").strip()]
         for domain_candidate in domain_key_candidates(domain):
             for mobile_candidate in mobile_candidates:
                 if not mobile_candidate:
                     continue
-                redis_key = f"{domain_candidate}:{mobile_candidate}"
-                self.logger.info(redis_key)
-                data = conn.get(redis_key)
-                if not data:
-                    continue
-                try:
-                    parsed = json.loads(data)
-                    self.logger.debug("Loaded redis login data for key=%s", redis_key)
-                    return parsed
-                except json.JSONDecodeError as exc:
-                    raise exc
-        self.logger.debug(
-            "No redis login data found for domain=%s mobile=%s", domain, mobile
-        )
+                cache_key = f"{domain_candidate}:{mobile_candidate}"
+                data = self.cache_store.get(cache_key)
+                if isinstance(data, dict):
+                    return data
+        self.logger.debug("No cached login data found for domain=%s mobile=%s", domain, mobile)
         return None
 
     def delete_login_data(self, mobile: str, domain: str) -> int:
-        conn = self._redis_connection()
         normalized_mobile = normalize_mobile(mobile)
         mobile_candidates = [normalized_mobile, (mobile or "").strip()]
-        redis_keys: list[str] = []
+        keys: list[str] = []
         for domain_candidate in domain_key_candidates(domain):
             for mobile_candidate in mobile_candidates:
                 if mobile_candidate:
-                    redis_keys.append(f"{domain_candidate}:{mobile_candidate}")
+                    keys.append(f"{domain_candidate}:{mobile_candidate}")
         unique_keys: list[str] = []
-        for key in redis_keys:
+        for key in keys:
             if key not in unique_keys:
                 unique_keys.append(key)
-        if not unique_keys:
-            return 0
-        return int(conn.delete(*unique_keys))
+        return self.cache_store.delete_many(unique_keys)
 
 
 def build_clients(
     config: Config,
     logger: logging.Logger,
 ) -> Tuple[MainApiClient, CaptchaWorkerClient, RedisClient]:
-    """
-    Build service clients from environment variables.
-    """
+    """Build service clients from environment variables."""
     captcha_solve_url = config.CAPTCHA_SOLVE_URL
     captcha_timeout = config.CAPTCHA_WORKER_TIMEOUT_SECONDS
     captcha_retries = config.CAPTCHA_WORKER_MAX_RETRIES
 
-    redis_host = config.REDIS_HOST
-    redis_port = config.REDIS_PORT
-    redis_db = config.REDIS_DB
-    redis_password = config.REDIS_PASSWORD.strip() or None
-
-    redis_pool = redis.ConnectionPool(
-        host=redis_host,
-        port=redis_port,
-        db=redis_db,
-        password=redis_password,
-        decode_responses=True,
-    )
+    cache_store = JsonCacheStore(config.SESSION_CACHE_FILE)
     return (
         MainApiClient(config, logger),
-        CaptchaWorkerClient(
-            captcha_solve_url, logger, captcha_timeout, captcha_retries
-        ),
-        RedisClient(redis_pool, logger),
+        CaptchaWorkerClient(captcha_solve_url, logger, captcha_timeout, captcha_retries),
+        RedisClient(cache_store, logger),
     )

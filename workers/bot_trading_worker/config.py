@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 @dataclass
 class Config:
-    APP_NAME: str = os.getenv("APP_NAME", "Bot Trading Worker")
+    APP_NAME: str = os.getenv("APP_NAME", "Bot Signal Worker")
     APP_VERSION: str = os.getenv("APP_VERSION", "1.0.0")
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "production")
 
@@ -15,6 +15,10 @@ class Config:
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
     REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))
     REDIS_PASSWORD: str = os.getenv("REDIS_PASSWORD", "")
+
+    SESSION_CACHE_FILE: str = os.getenv("SESSION_CACHE_FILE", "data/sessions.json")
+    BOT_STATE_FILE: str = os.getenv("BOT_STATE_FILE", "data/bot_state.json")
+    HELPER_WS_PRICE_URL: str = os.getenv("HELPER_WS_PRICE_URL", "ws://localhost:8010/ws/helper-price")
 
     USERS_JSON_PATH: str = os.getenv(
         "TRADING_USERS_JSON_PATH",

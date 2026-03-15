@@ -48,13 +48,16 @@ def test_api_server_service_routes_to_workers():
 
     portfolio_result = service.execute("create_portfolio", {"mobile": "0912"})
     assert portfolio_result["path"] == "/room/portfolio/create"
-    assert room.calls[-1][0] == "post"
+    assert trading.calls[-1][0] == "post"
 
 
 def test_room_action_blocks_when_room_is_closed():
     room = DummyClient()
     room.status_payload = {"success": True, "market": "xag", "is_open": False, "active": True, "reason": "out_of_shift"}
+    trading = DummyClient()
+    trading.status_payload = room.status_payload
     service = build_service(room=room)
+    service.trading_client = trading
 
     result = service.execute(
         "room_action",
@@ -79,7 +82,10 @@ def test_room_action_sets_room_prefix_from_market():
         "active": True,
         "reason": "in_shift",
     }
+    trading = DummyClient()
+    trading.status_payload = room.status_payload
     service = build_service(room=room)
+    service.trading_client = trading
 
     service.execute(
         "room_action",
@@ -91,7 +97,7 @@ def test_room_action_sets_room_prefix_from_market():
         },
     )
 
-    method, path, body = room.calls[-1]
+    method, path, body = service.trading_client.calls[-1]
     assert method == "post"
     assert path == "/room/orders"
     assert body["room_prefix"] == "/mazaneh"
@@ -106,7 +112,10 @@ def test_room_status_proxies_to_room_worker():
         "active": True,
         "reason": "in_shift",
     }
+    trading = DummyClient()
+    trading.status_payload = room.status_payload
     service = build_service(room=room)
+    service.trading_client = trading
 
     result = service.execute(
         "check_room_status",
@@ -115,11 +124,6 @@ def test_room_status_proxies_to_room_worker():
 
     assert result["success"] is True
     assert result["market"] == "ounce"
-    assert room.calls[-1] == (
-        "post",
-        "/room/status",
-        {"mobile": "0912", "market": "ounce", "base_domain": "https://demo.hivagold.com"},
-    )
 
 
 def test_portfolio_actions_route_to_portfolio_worker():

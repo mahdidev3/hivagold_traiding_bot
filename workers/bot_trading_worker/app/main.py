@@ -8,7 +8,6 @@ from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from config import get_config
 from .clients import build_clients
 from .logging_setup import setup_logger
-from .queue_manager import TradingQueueManager
 from .schemas import (
     HealthResponse,
     LatestSignalsResponse,
@@ -16,6 +15,7 @@ from .schemas import (
     ProcessTradingResponse,
 )
 from .service import TradingWorkerService
+from .session_service import TradingSessionService
 
 
 config = get_config()
@@ -24,18 +24,16 @@ logger: Logger = setup_logger(config)
 
 redis_client, market_client = build_clients(config)
 trading_service = TradingWorkerService(config, redis_client, market_client, logger)
-queue_manager = TradingQueueManager(trading_service, logger)
+session_service = TradingSessionService(config)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Trading Worker started")
-    await queue_manager.start()
     if config.AUTO_START:
         await trading_service.start()
     yield
     await trading_service.stop()
-    await queue_manager.stop()
     logger.info("Trading Worker stopped")
 
 
@@ -61,7 +59,7 @@ async def health():
 async def process_request(payload: ProcessTradingRequest):
     try:
         logger.debug("Received process trading request")
-        result = await queue_manager.enqueue(payload.model_dump())
+        result = await trading_service.process(payload.model_dump())
         return _http_from_result(result)
     except HTTPException:
         raise
@@ -73,6 +71,81 @@ async def process_request(payload: ProcessTradingRequest):
 @app.get("/signals/latest", response_model=LatestSignalsResponse)
 async def latest_signals():
     return LatestSignalsResponse(success=True, signals=trading_service.latest_signals())
+
+
+@app.post("/room/status")
+async def room_status(payload: dict):
+    base_domain = payload.get("base_domain", "https://demo.hivagold.com")
+    market = payload.get("market", "xag")
+    return session_service.room_status(payload["mobile"], base_domain, market)
+
+
+@app.post("/room/portfolios")
+async def room_portfolios(payload: dict):
+    base_domain = payload.get("base_domain", "https://demo.hivagold.com")
+    room_prefix = payload.get("room_prefix", f"/{payload.get('market', 'xag')}")
+    data = session_service._get(payload["mobile"], base_domain, room_prefix, "/api/portfolio/active/")
+    return {"success": True, "portfolios": data}
+
+
+@app.post("/room/portfolio/create")
+async def room_portfolio_create(payload: dict):
+    base_domain = payload.get("base_domain", "https://demo.hivagold.com")
+    room_prefix = payload.get("room_prefix", f"/{payload.get('market', 'xag')}")
+    body = {"portfolio_type": payload.get("portfolio_type", "real"), "initial_balance": payload.get("initial_balance", 1000000)}
+    data = session_service._post(payload["mobile"], base_domain, room_prefix, "/api/portfolio/create/", body)
+    return {"success": True, "portfolio": data}
+
+@app.post("/room/portfolio/close")
+async def room_portfolio_close(payload: dict):
+    base_domain = payload.get("base_domain", "https://demo.hivagold.com")
+    room_prefix = payload.get("room_prefix", f"/{payload.get('market', 'xag')}")
+    data = session_service._post(payload["mobile"], base_domain, room_prefix, "/api/portfolio/close/", payload)
+    return {"success": True, "portfolio": data}
+
+@app.post("/room/orders")
+async def room_orders(payload: dict):
+    base_domain = payload.get("base_domain", "https://demo.hivagold.com")
+    room_prefix = payload.get("room_prefix", f"/{payload.get('market', 'xag')}")
+    data = session_service._get(payload["mobile"], base_domain, room_prefix, "/api/order/active/")
+    return {"success": True, "orders": data}
+
+@app.post("/room/order/create")
+async def room_order_create(payload: dict):
+    base_domain = payload.get("base_domain", "https://demo.hivagold.com")
+    room_prefix = payload.get("room_prefix", f"/{payload.get('market', 'xag')}")
+    data = session_service._post(payload["mobile"], base_domain, room_prefix, "/api/order/create/", payload)
+    return {"success": True, "order": data}
+
+@app.post("/room/order/close")
+async def room_order_close(payload: dict):
+    base_domain = payload.get("base_domain", "https://demo.hivagold.com")
+    room_prefix = payload.get("room_prefix", f"/{payload.get('market', 'xag')}")
+    data = session_service._post(payload["mobile"], base_domain, room_prefix, "/api/order/close/", payload)
+    return {"success": True, "order": data}
+
+@app.post("/room/transactions")
+async def room_transactions(payload: dict):
+    base_domain = payload.get("base_domain", "https://demo.hivagold.com")
+    room_prefix = payload.get("room_prefix", f"/{payload.get('market', 'xag')}")
+    data = session_service._get(payload["mobile"], base_domain, room_prefix, "/api/transaction/active/")
+    return {"success": True, "transactions": data}
+
+@app.post("/room/transaction/close")
+async def room_transaction_close(payload: dict):
+    base_domain = payload.get("base_domain", "https://demo.hivagold.com")
+    room_prefix = payload.get("room_prefix", f"/{payload.get('market', 'xag')}")
+    data = session_service._post(payload["mobile"], base_domain, room_prefix, "/api/transaction/close/", payload)
+    return {"success": True, "transaction": data}
+
+@app.post("/bot/activate")
+async def bot_activate(payload: dict):
+    return session_service.bot_activate(payload)
+
+@app.post("/state/cleanup")
+async def state_cleanup(payload: dict):
+    base_domain = payload.get("base_domain", "https://demo.hivagold.com")
+    return session_service.cleanup_state(payload["mobile"], base_domain)
 
 
 @app.websocket("/signals/ws")

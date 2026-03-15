@@ -9,14 +9,13 @@ data:
 
   # Service discovery (internal cluster DNS)
   AUTH_WORKER_URL: http://bot-auth-worker:8002
-  ROOM_WORKER_URL: http://bot-room-worker:8005
+  ROOM_WORKER_URL: http://bot-trading-worker:8006
   TRADING_WORKER_URL: http://bot-trading-worker:8006
   CAPTCHA_SOLVE_URL: http://bot-captcha-worker:8001/solve
 
-  # Redis
-  REDIS_HOST: redis
-  REDIS_PORT: "6379"
-  REDIS_DB: "0"
+  SESSION_CACHE_FILE: /data/sessions.json
+  BOT_STATE_FILE: /data/bot_state.json
+  SIMULATOR_WORKER_URL: http://bot-simulator-worker:8010
 
   # Domain defaults (override for your real environment)
   BASE_DOMAIN: https://demo.hivagold.com

@@ -44,19 +44,25 @@ class ApiServerService:
         payload = {"mobile": mobile, "market": selected_market}
         if base_domain:
             payload["base_domain"] = base_domain
-        return self.room_client.post("/room/status", payload)
+        return self.trading_client.post("/room/status", payload)
 
     def execute(self, action: str, payload: dict[str, Any]) -> dict[str, Any]:
         self.logger.debug("Executing action=%s", action)
         if action == "login":
             return self.auth_client.post("/login", payload)
         if action == "logout":
-            return self.auth_client.post("/logout", payload)
+            auth_result = self.auth_client.post("/logout", payload)
+            trading_result = self.trading_client.post("/state/cleanup", payload)
+            return {"success": bool(auth_result.get("success") and trading_result.get("success")), "auth": auth_result, "trading": trading_result}
         if action == "create_portfolio":
-            return self.room_client.post("/room/portfolio/create", payload)
+            return self.trading_client.post("/room/portfolio/create", payload)
         if action == "get_signals":
             return self.trading_client.get("/signals/latest")
         if action == "check_room_status":
+            return self.trading_client.post("/room/status", payload)
+        if action == "bot_activate":
+            return self.trading_client.post("/bot/activate", payload)
+        if action == "check_room_status_old_unused":
             return self.room_status(
                 payload["mobile"], payload.get("base_domain"), payload.get("market")
             )
@@ -96,7 +102,7 @@ class ApiServerService:
                     endpoint,
                     payload["room_prefix"],
                 )
-                return self.room_client.post(endpoint, payload)
+                return self.trading_client.post(endpoint, payload)
             except requests.RequestException as exc:
                 self.logger.exception("Room API request failed")
                 return {

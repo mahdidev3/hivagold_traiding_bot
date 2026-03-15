@@ -5,10 +5,9 @@ This repository contains a Python/FastAPI-based microservice system for Hivagold
 - **API Server**: single public entrypoint for auth/room/signal APIs.
 - **Bot Auth Worker**: login/logout + captcha/auth cookie flow.
 - **Bot Captcha Worker**: captcha solving service.
-- **Bot Room Worker**: room/portfolio/order/transaction operations.
-- **Bot Trading Worker**: websocket-driven market state + modular strategy signals.
-- **Bot Portfolio Worker**: strategy tester that consumes Redis events and tracks strategy PnL/win-rate history.
-- **Redis Worker**: shared state/cache + event bus.
+- **Bot Signal Worker** (`workers/bot_trading_worker`): websocket-driven market state + room/order/portfolio APIs + strategy signals.
+- **Bot Portfolio Worker**: strategy tester and performance history APIs.
+- **Bot Simulator Worker**: local Hivagold-like simulator endpoints for portfolio/order testing.
 
 ---
 
@@ -19,10 +18,9 @@ workers/
   api_server/
   bot_auth_worker/
   bot_captcha_worker/
-  bot_room_worker/
   bot_trading_worker/
   bot_portfolio_worker/
-  redis_worker/
+  bot_simulator_worker/
 tests/
 ```
 
@@ -79,25 +77,22 @@ pytest -q
 Use one terminal per service.
 
 ```bash
-# terminal 1 (redis required)
-docker run --rm -p 6379:6379 --name hivagold-redis redis:7
-
-# terminal 2
+# terminal 1
 cd workers/bot_captcha_worker && python run.py
 
-# terminal 3
+# terminal 2
 cd workers/bot_auth_worker && python run.py
 
-# terminal 4
-cd workers/bot_room_worker && python run.py
-
-# terminal 5
+# terminal 3
 cd workers/bot_trading_worker && python run.py
 
-# terminal 6
+# terminal 4
 cd workers/bot_portfolio_worker && python run.py
 
-# terminal 7
+# terminal 5
+cd workers/bot_simulator_worker && python run.py
+
+# terminal 6
 cd workers/api_server && python run.py
 ```
 

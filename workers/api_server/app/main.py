@@ -1,4 +1,3 @@
-from contextlib import asynccontextmanager
 from logging import Logger
 
 from fastapi import FastAPI, Header, HTTPException
@@ -6,7 +5,6 @@ from fastapi import FastAPI, Header, HTTPException
 from config import get_config
 from .clients import build_clients
 from .logging_setup import setup_logger
-from .queue_manager import ApiQueueManager
 from .schemas import (
     ApiActionResponse,
     HealthResponse,
@@ -27,19 +25,8 @@ logger: Logger = setup_logger(config)
 
 auth_client, room_client, trading_client, portfolio_client = build_clients(config, logger)
 service = ApiServerService(config, auth_client, room_client, trading_client, portfolio_client, logger)
-queue_manager = ApiQueueManager(service, logger)
 
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Starting api queue manager")
-    await queue_manager.start()
-    yield
-    logger.info("Stopping api queue manager")
-    await queue_manager.stop()
-
-
-app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION, lifespan=lifespan)
+app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION)
 
 
 def require_admin_key(x_admin_key: str = Header(default="")):
@@ -58,7 +45,7 @@ async def health():
 async def login(payload: LoginRequest):
     try:
         logger.debug("Received login request")
-        result = await queue_manager.enqueue(
+        result = service.execute(
             "login", payload.model_dump(exclude_none=True)
         )
         return ApiActionResponse(success=result.get("success", False), data=result)
@@ -70,7 +57,7 @@ async def login(payload: LoginRequest):
 async def logout(payload: LogoutRequest):
     try:
         logger.debug("Received logout request")
-        result = await queue_manager.enqueue(
+        result = service.execute(
             "logout", payload.model_dump(exclude_none=True)
         )
         return ApiActionResponse(success=result.get("success", False), data=result)
@@ -82,7 +69,7 @@ async def logout(payload: LogoutRequest):
 async def signals_latest():
     try:
         logger.debug("Received signals_latest request")
-        result = await queue_manager.enqueue("get_signals", {})
+        result = service.execute("get_signals", {})
         return ApiActionResponse(success=result.get("success", False), data=result)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
@@ -92,7 +79,7 @@ async def signals_latest():
 async def room_status(payload: RoomStatusRequest):
     try:
         logger.debug("Received room_status request")
-        result = await queue_manager.enqueue("check_room_status", payload.model_dump())
+        result = service.execute("check_room_status", payload.model_dump())
         return RoomStatusResponse(**result)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -102,50 +89,56 @@ async def room_status(payload: RoomStatusRequest):
 
 @app.post("/portfolio/rules", response_model=ApiActionResponse)
 async def portfolio_rule(payload: PortfolioRuleRequest):
-    result = await queue_manager.enqueue("portfolio_rule_upsert", payload.model_dump())
+    result = service.execute("portfolio_rule_upsert", payload.model_dump())
     return ApiActionResponse(success=result.get("success", False), data=result)
 
 
 @app.post("/portfolio/orders", response_model=ApiActionResponse)
 async def portfolio_order(payload: PortfolioOrderRequest):
-    result = await queue_manager.enqueue("portfolio_order_create", payload.model_dump(exclude_none=True))
+    result = service.execute("portfolio_order_create", payload.model_dump(exclude_none=True))
     return ApiActionResponse(success=result.get("success", False), data=result)
 
 
 @app.post("/portfolio/orders/bot", response_model=ApiActionResponse)
 async def portfolio_order_bot(payload: PortfolioBotOrderRequest):
-    result = await queue_manager.enqueue("portfolio_order_bot", payload.model_dump(exclude_none=True))
+    result = service.execute("portfolio_order_bot", payload.model_dump(exclude_none=True))
     return ApiActionResponse(success=result.get("success", False), data=result)
 
 
 @app.post("/portfolio/price", response_model=ApiActionResponse)
 async def portfolio_price(payload: PortfolioPriceTickRequest):
-    result = await queue_manager.enqueue("portfolio_price_tick", payload.model_dump())
+    result = service.execute("portfolio_price_tick", payload.model_dump())
     return ApiActionResponse(success=result.get("success", False), data=result)
 
 
 @app.get("/portfolio/users/{user_id}/stats", response_model=ApiActionResponse)
 async def portfolio_user_stats(user_id: str):
-    result = await queue_manager.enqueue("portfolio_user_stats", {"user_id": user_id})
+    result = service.execute("portfolio_user_stats", {"user_id": user_id})
     return ApiActionResponse(success=result.get("user_id") is not None, data=result)
 
 
 @app.get("/portfolio/db/records", response_model=ApiActionResponse)
 async def portfolio_db_records():
-    result = await queue_manager.enqueue("portfolio_db_records", {})
+    result = service.execute("portfolio_db_records", {})
     return ApiActionResponse(success=result.get("success", False), data=result)
 
 
 @app.get("/portfolio/strategies/{strategy}/pnl-positions", response_model=ApiActionResponse)
 async def portfolio_strategy_pnl_positions(strategy: str):
-    result = await queue_manager.enqueue("portfolio_strategy_pnl_positions", {"strategy": strategy})
+    result = service.execute("portfolio_strategy_pnl_positions", {"strategy": strategy})
     return ApiActionResponse(success=result.get("success", False), data=result)
 
 
 @app.get("/admin/db/all", response_model=ApiActionResponse)
 async def admin_db_all(x_admin_key: str = Header(default="", alias="x-admin-key")):
     require_admin_key(x_admin_key)
-    result = await queue_manager.enqueue("portfolio_admin_db", {})
+    result = service.execute("portfolio_admin_db", {})
+    return ApiActionResponse(success=result.get("success", False), data=result)
+
+
+@app.post("/bot/activate", response_model=ApiActionResponse)
+async def bot_activate(payload: dict):
+    result = service.execute("bot_activate", payload)
     return ApiActionResponse(success=result.get("success", False), data=result)
 
 
@@ -171,7 +164,7 @@ async def room_action(action_name: str, payload: RoomActionRequest):
     body["endpoint"] = endpoint
     try:
         logger.debug("Received room_action request action_name=%s", action_name)
-        result = await queue_manager.enqueue("room_action", body)
+        result = service.execute("room_action", body)
         return ApiActionResponse(success=result.get("success", False), data=result)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))

@@ -7,12 +7,12 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable, Dict, Optional
 from urllib.parse import urlparse
 
-import redis
 import requests
 import websockets
 from websockets.exceptions import ConnectionClosed
 
 from config import Config
+from workers.common_json_store import JsonCacheStore
 
 
 class BadRequestError(Exception):
@@ -108,58 +108,29 @@ def domain_candidates(domain: str) -> list[str]:
 
 
 class HivagoldRedisClient:
-    def __init__(self, redis_pool: redis.ConnectionPool):
-        self.redis_pool = redis_pool
+    def __init__(self, config: Config):
         self.logger = logging.getLogger(__name__)
-        # Backward compatibility: existing service code accesses `.redis_client`.
-        # Keep a shared redis handle for pub/sub operations.
-        self.redis_client = self._redis_connection()
-
-    def _redis_connection(self) -> redis.Redis:
-        return redis.Redis(connection_pool=self.redis_pool, decode_responses=True)
+        self.cache = JsonCacheStore(config.SESSION_CACHE_FILE)
+        self.events: list[dict[str, Any]] = []
 
     def get_session_data(self, mobile: str, domain: str) -> Optional[Dict[str, Any]]:
-        conn = self._redis_connection()
         normalized_mobile = normalize_mobile(mobile)
         mobile_candidates: list[str] = []
         for candidate in [normalized_mobile, (mobile or "").strip()]:
             if candidate and candidate not in mobile_candidates:
                 mobile_candidates.append(candidate)
 
-        attempted_keys: list[str] = []
         for key_domain in domain_candidates(domain):
             for mobile_candidate in mobile_candidates:
-                redis_key = f"{key_domain}:{mobile_candidate}"
-                attempted_keys.append(redis_key)
-                raw = conn.get(redis_key)
-                if not raw:
-                    continue
-                try:
-                    data = json.loads(raw)
-                except json.JSONDecodeError:
-                    self.logger.error(
-                        "Invalid JSON for redis session key=%s", redis_key
-                    )
-                    continue
+                cache_key = f"{key_domain}:{mobile_candidate}"
+                data = self.cache.get(cache_key)
                 if isinstance(data, dict):
                     return data
-                self.logger.warning(
-                    "Unexpected redis session payload type key=%s type=%s",
-                    redis_key,
-                    type(data).__name__,
-                )
-        self.logger.debug(
-            "No redis session found domain=%s mobile=%s attempts=%s",
-            domain,
-            normalized_mobile,
-            len(attempted_keys),
-        )
         return None
 
     def publish_event(self, channel: str, event: Dict[str, Any]) -> int:
-        payload = json.dumps(event, ensure_ascii=False)
-        return int(self.redis_client.publish(channel, payload))
-
+        self.events.append({"channel": channel, "event": event})
+        return 1
 
 class MarketDataClient:
     def __init__(self, config: Config):
@@ -342,15 +313,7 @@ class MarketDataClient:
 
 
 def build_clients(config: Config) -> tuple[HivagoldRedisClient, MarketDataClient]:
-    redis_password = config.REDIS_PASSWORD.strip() or None
-    redis_pool = redis.ConnectionPool(
-        host=config.REDIS_HOST,
-        port=config.REDIS_PORT,
-        db=config.REDIS_DB,
-        password=redis_password,
-        decode_responses=True,
-    )
-    return HivagoldRedisClient(redis_pool), MarketDataClient(config)
+    return HivagoldRedisClient(config), MarketDataClient(config)
 
 
 def cookie_header(cookies: Dict[str, str]) -> str:

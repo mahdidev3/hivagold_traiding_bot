@@ -40,6 +40,8 @@ class Config:
     AUTH_WORKER_PORT: int = int(os.getenv("AUTH_WORKER_PORT", "8002"))
     AUTH_WORKER_HOST: str = os.getenv("AUTH_WORKER_HOST", "0.0.0.0")
 
+    SESSION_CACHE_FILE: str = os.getenv("SESSION_CACHE_FILE", "data/sessions.json")
+
     REDIS_HOST: str = os.getenv("REDIS_HOST", "localhost")
     REDIS_PORT: int = int(os.getenv("REDIS_PORT", "6379"))
     REDIS_DB: int = int(os.getenv("REDIS_DB", "0"))

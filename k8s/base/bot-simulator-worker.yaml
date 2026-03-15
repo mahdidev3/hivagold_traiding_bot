@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bot-simulator-worker
+  namespace: hivagold
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bot-simulator-worker
+  template:
+    metadata:
+      labels:
+        app: bot-simulator-worker
+    spec:
+      containers:
+        - name: bot-simulator-worker
+          image: bot-simulator-worker:1.0.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8010
+              name: http
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bot-simulator-worker
+  namespace: hivagold
+spec:
+  selector:
+    app: bot-simulator-worker
+  ports:
+    - port: 8010
+      targetPort: http
+      name: http

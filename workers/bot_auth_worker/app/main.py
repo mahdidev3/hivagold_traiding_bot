@@ -1,11 +1,9 @@
-from contextlib import asynccontextmanager
 from logging import Logger
 
 from fastapi import FastAPI, HTTPException
 
 from .clients import build_clients
 from .logging_setup import setup_logger
-from .queue_manager import LoginQueueManager
 from .schemas import (
     HealthResponse,
     LoginRequest,
@@ -23,23 +21,7 @@ api_client, captcha_worker_client, redis_client = build_clients(config, logger)
 service = LoginWorkerService(
     api_client, captcha_worker_client, redis_client, config, logger
 )
-queue_manager = LoginQueueManager(service, logger)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Starting login queue manager")
-    await queue_manager.start()
-    yield
-    logger.info("Stopping login queue manager")
-    await queue_manager.stop()
-
-
-app = FastAPI(
-    title=config.APP_NAME,
-    version=config.APP_VERSION,
-    lifespan=lifespan,
-)
+app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION)
 
 
 # ------------------------------------------------------------------
@@ -96,7 +78,7 @@ async def login(payload: LoginRequest):
     try:
         logger.debug("Received login request for mobile=%s", payload.mobile)
         base_domain = payload.base_domain or config.DEFAULT_BASE_DOMAIN
-        (success, cookies) = await queue_manager.enqueue(
+        (success, cookies) = service.login(
             payload.mobile,
             payload.password,
             payload.max_retries,
