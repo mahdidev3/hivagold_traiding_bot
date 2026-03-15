@@ -54,7 +54,7 @@ def domain_key_candidates(domain: str) -> list[str]:
     return unique
 
 
-class HivagoldRedisClient:
+class UserSessionStore:
     """File-backed user session store compatible with existing room worker usage."""
 
     def __init__(self, users_root: str, logger: logging.Logger):
@@ -149,7 +149,7 @@ class PortfolioClient:
     """
 
     def __init__(
-        self, redis_client: HivagoldRedisClient, config: Config, logger: logging.Logger
+        self, redis_client: UserSessionStore, config: Config, logger: logging.Logger
     ):
         self.logger = logger
         self.redis_client = redis_client
@@ -562,7 +562,7 @@ class OrdersClient:
     """
 
     def __init__(
-        self, redis_client: HivagoldRedisClient, config: Config, logger: logging.Logger
+        self, redis_client: UserSessionStore, config: Config, logger: logging.Logger
     ):
         self.logger = logger
         self.redis_client = redis_client
@@ -822,7 +822,7 @@ class OrdersClient:
 def build_clients(
     config: Config,
     logger: logging.Logger,
-) -> Tuple[HivagoldRedisClient, PortfolioClient, OrdersClient]:
+) -> Tuple[UserSessionStore, PortfolioClient, OrdersClient]:
     """
     Build and initialize client instances.
 
@@ -832,7 +832,7 @@ def build_clients(
     Returns:
         Tuple containing (redis_client, portfolio_client, orders_client)
     """
-    redis_client = HivagoldRedisClient(config.USERS_STORAGE_DIR, logger)
+    redis_client = UserSessionStore(config.USERS_STORAGE_DIR, logger)
     portfolio_client = PortfolioClient(redis_client, config, logger)
     orders_client = OrdersClient(redis_client, config, logger)
 

@@ -7,7 +7,7 @@ This repository contains a Python/FastAPI-based microservice system for Hivagold
 - **Bot Captcha Worker**: captcha solving service.
 - **Bot Room Worker**: room/portfolio/order/transaction operations.
 - **Bot Trading Worker**: websocket-driven market state + modular strategy signals.
-- **Bot Portfolio Worker**: strategy tester that consumes Redis events and tracks strategy PnL/win-rate history.
+- **Bot Simulator Worker**: strategy tester that consumes Redis events and tracks strategy PnL/win-rate history.
 - **Redis Worker**: shared state/cache + event bus.
 
 ---
@@ -21,7 +21,7 @@ workers/
   bot_captcha_worker/
   bot_room_worker/
   bot_trading_worker/
-  bot_portfolio_worker/
+  bot_simulator_worker/
   redis_worker/
 tests/
 ```
@@ -35,7 +35,7 @@ tests/
 - **bot_room_worker**: portfolio/order/transaction management endpoints against Hivagold room APIs.
 - **bot_trading_worker**: keeps existing `price`/`live-bars`/`wall` websocket streams, runs enabled strategy modules, publishes signals + market events.
 - **bot_captcha_worker**: dedicated captcha solving endpoint used by auth flow.
-- **bot_portfolio_worker**: strategy tester (per-strategy virtual portfolio) that consumes Redis events, stores position symbol, and updates only matching-symbol positions for each price tick.
+- **bot_simulator_worker**: strategy tester (per-strategy virtual portfolio) that consumes Redis events, stores position symbol, and updates only matching-symbol positions for each price tick.
 - **redis_worker**: shared cache/session store and worker-to-worker event channel.
 
 ---
@@ -62,7 +62,7 @@ pip install -r workers/bot_auth_worker/requirements.txt
 pip install -r workers/bot_captcha_worker/requirements.txt
 pip install -r workers/bot_room_worker/requirements.txt
 pip install -r workers/bot_trading_worker/requirements.txt
-pip install -r workers/bot_portfolio_worker/requirements.txt
+pip install -r workers/bot_simulator_worker/requirements.txt
 pip install pytest
 ```
 
@@ -95,7 +95,7 @@ cd workers/bot_room_worker && python run.py
 cd workers/bot_trading_worker && python run.py
 
 # terminal 6
-cd workers/bot_portfolio_worker && python run.py
+cd workers/bot_simulator_worker && python run.py
 
 # terminal 7
 cd workers/api_server && python run.py
@@ -157,9 +157,9 @@ docker compose down
 ### Portfolio worker
 
 ```bash
-cd workers/bot_portfolio_worker
+cd workers/bot_simulator_worker
 docker compose up -d
-docker compose logs -f portfolio-worker
+docker compose logs -f bot-simulator-worker
 docker compose down
 ```
 
@@ -267,7 +267,7 @@ curl -X POST http://localhost:8000/room/orders \
 
 ### Portfolio Strategy Tester API (direct worker)
 
-All direct portfolio-worker endpoints require `x-api-key`.
+All direct bot-simulator-worker endpoints require `x-api-key`.
 
 Process API:
 
@@ -375,7 +375,7 @@ Important ones:
   - `ENABLE_STRATEGY_EMA_WALL_V1`
   - `REDIS_MARKET_EVENT_CHANNEL`
 - Portfolio worker:
-  - `PORTFOLIO_WORKER_HOST`, `PORTFOLIO_WORKER_PORT`
+  - `SIMULATOR_WORKER_HOST`, `SIMULATOR_WORKER_PORT`
   - `BOT_API_KEY`
   - `DATABASE_PATH`
   - `REDIS_HOST`, `REDIS_PORT`, `REDIS_MARKET_EVENT_CHANNEL`

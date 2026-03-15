@@ -1,0 +1,25 @@
+services:
+  bot-simulator-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: bot-simulator-worker:latest
+    container_name: bot-simulator-worker
+    env_file:
+      - .env
+    ports:
+      - "${SIMULATOR_WORKER_PORT:-8007}:8007"
+    environment:
+      - SIMULATOR_WORKER_HOST=0.0.0.0
+      - SIMULATOR_WORKER_PORT=8007
+      - USERS_STORAGE_DIR=${USERS_STORAGE_DIR:-../bot_auth_worker/Users}
+    volumes:
+      - ./data:/app/data
+      - ../bot_auth_worker/Users:/app/Users
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8007/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
