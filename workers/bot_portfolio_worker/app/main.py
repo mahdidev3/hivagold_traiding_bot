@@ -29,7 +29,8 @@ async def health():
 
 
 @app.post("/portfolio/process", response_model=ProcessPortfolioResponse)
-async def process(payload: ProcessPortfolioRequest):
+sync def process(payload: ProcessPortfolioRequest):
+
     result = await service.process(payload.model_dump())
     if not result.get("success"):
         raise HTTPException(status_code=400, detail=result.get("error", "processing error"))
