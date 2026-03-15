@@ -1,46 +1,41 @@
 # Bot Trading Worker
 
-Bot Trading Worker now runs as a **strategy-module service**. It keeps the existing websocket communication for `price`, `live-bars`, and `wall`, and evaluates enabled strategy modules on top of that live stream.
+Bot Trading Worker now runs bots directly (without Redis signals/pubsub).
 
-## Architecture
-- Keeps existing WS channels:
-  - `price` → latest market price
-  - `live-bars` → OHLC bars
-  - `wall` → orderbook buy/sell walls
-- Builds one shared market state per user session.
-- Runs strategy modules over shared state.
-- Publishes:
-  - strategy signals to HTTP/WS clients
-  - market events + signals to Redis channel (`bot.market.events`) for portfolio testing worker
+## What it keeps
+- Hivagold market data API + websocket usage (`live-bars`, `price`, `wall`).
+- Loading user headers/cookies from JSON session files.
+- Base runtime for strategy execution per activated bot.
 
-## Current Strategy Modules
-- `ema_wall_v1` (implemented existing logic)
-  - EMA alignment
-  - Momentum
-  - Wall imbalance + microprice
-  - ATR-based SL/TP
-
-## Environment Variables
-Important:
-- `REDIS_HOST=redis` (bridge/service DNS)
-- `REDIS_MARKET_EVENT_CHANNEL=bot.market.events`
-- `ENABLE_STRATEGY_EMA_WALL_V1=true|false`
-
-Existing settings are still respected (`WS_*`, `BARS_*`, risk settings, etc.).
+## What changed
+- Redis is fully removed.
+- Added optional second/external price websocket (`WS_EXTERNAL_PRICE_URL`).
+- Each activated bot runs in its own async task context with:
+  - `mobile`
+  - `strategy`
+  - `room`
+  - `run_mode` (`simulator` or `real`)
+- Simulator is integrated via API (`/portfolio/price`) when run mode is `simulator`.
+- No signal generation/publishing is done anymore; worker emits internal bot events only.
 
 ## API
-- `POST /trading/process` with actions: `start`, `stop`, `status`, `latest_signals`
-- `GET /signals/latest`
-- `WS /signals/ws`
+- `POST /trading/process`
+  - `start`, `stop`, `status`, `list_bots`, `activate_bot`, `deactivate_bot`
+- `GET /signals/latest` (latest bot events)
+- `WS /signals/ws` (stream bot events)
 
-## Run
-```bash
-python run.py
+## Bot config (`users.json`)
+```json
+[
+  {
+    "mobile": "0912...",
+    "password": "...",
+    "domain": "https://hivagold.com",
+    "strategy": "your_strategy_name",
+    "room": "xag",
+    "run_mode": "simulator",
+    "active": true,
+    "metadata": {}
+  }
+]
 ```
-
-## Docker
-```bash
-docker compose up -d
-```
-
-Use bridge DNS for dependencies (e.g. `redis`) instead of localhost.

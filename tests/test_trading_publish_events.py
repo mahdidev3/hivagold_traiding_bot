@@ -3,55 +3,37 @@ import asyncio
 from workers.bot_trading_worker.app.service import TradingWorkerService
 
 
-class DummyRedis:
-    def __init__(self):
-        self.calls = []
-
-    def publish_event(self, channel: str, event: dict) -> int:
-        self.calls.append((channel, event))
-        return 1
+class DummySessionStore:
+    pass
 
 
 class DummyMarket:
     pass
 
 
+class DummyExec:
+    pass
+
+
 class DummyConfig:
     USERS_JSON_PATH = "workers/bot_trading_worker/users.json"
+    USERS_STORAGE_DIR = "workers/bot_auth_worker/Users"
     ROOM_PREFIX = "/xag"
-    REDIS_MARKET_EVENT_CHANNEL = "bot.market.events"
     BARS_SYMBOL = "xag"
+    WS_LIVE_BARS_PATH = "/xag/ws/xag/live-bars/"
+    WS_PRICE_PATH = "/xag/ws/xag/price/"
+    WS_WALL_PATH = "/xag/ws/xag/wall/"
+    WS_EXTERNAL_PRICE_URL = ""
 
 
-class DummyUser:
-    mobile = "0912"
-    domain = "https://hivagold.com"
+async def _run_test_event_publish():
+    service = TradingWorkerService(DummyConfig(), DummySessionStore(), DummyMarket(), DummyExec())
+    event = {"domain": "d", "mobile": "m", "event": "price", "payload": {"price": 1}}
+    await service._publish_event(event)
+    latest = service.latest_signals()
+    assert len(latest) == 1
+    assert latest[0]["payload"]["price"] == 1
 
 
-async def _run_test_market_publish():
-    redis_client = DummyRedis()
-    service = TradingWorkerService(DummyConfig(), redis_client, DummyMarket())
-    await service._publish_market_event(DummyUser(), "price", {"price": 100})
-    assert redis_client.calls
-    channel, event = redis_client.calls[0]
-    assert channel == DummyConfig.REDIS_MARKET_EVENT_CHANNEL
-    assert event["event"] == "price"
-
-
-async def _run_test_signal_publish():
-    redis_client = DummyRedis()
-    service = TradingWorkerService(DummyConfig(), redis_client, DummyMarket())
-    signal = {"domain": "d", "mobile": "m", "strategy": "s", "status": "signal"}
-    await service._publish_signal(signal)
-    assert redis_client.calls
-    _, event = redis_client.calls[0]
-    assert event["event"] == "signal"
-    assert event["payload"] == signal
-
-
-def test_publish_market_event_uses_publish_event_api():
-    asyncio.run(_run_test_market_publish())
-
-
-def test_publish_signal_uses_publish_event_api():
-    asyncio.run(_run_test_signal_publish())
+def test_publish_event_updates_latest_event_cache():
+    asyncio.run(_run_test_event_publish())

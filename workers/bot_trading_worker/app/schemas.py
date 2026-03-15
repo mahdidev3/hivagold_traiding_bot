@@ -1,58 +1,49 @@
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
 
 class HealthResponse(BaseModel):
-    status: str = Field(description="Health status")
-    app_name: str = Field(description="Application name")
-    version: str = Field(description="Application version")
+    status: str
+    app_name: str
+    version: str
 
 
-class UserAccount(BaseModel):
+class TradingBotContext(BaseModel):
     mobile: str
     password: str
     domain: str
+    strategy: str = "pending"
+    room: str = "xag"
+    run_mode: Literal["simulator", "real"] = "simulator"
+    active: bool = True
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
-class SignalOrder(BaseModel):
-    action: str
-    ordertype: str
-    price: Optional[float] = None
-    units: float
-    stop_loss: Optional[float]
-    take_profit: Optional[float]
-
-
-class TradingSignal(BaseModel):
-    ts: int
-    mobile: str
-    domain: str
-    symbol: str = "xag"
-    status: str
-    bias: str
-    score: float
-    confidence: float
-    reasons: List[str] = Field(default_factory=list)
-    recommendation: Optional[SignalOrder] = None
-    metrics: Dict[str, Any] = Field(default_factory=dict)
-    strategy: str = "system"
-    error: Optional[str] = None
+class ProcessTradingRequest(BaseModel):
+    action: Literal["start", "stop", "status", "list_bots", "activate_bot", "deactivate_bot"]
+    mobile: Optional[str] = None
+    domain: Optional[str] = None
 
 
 class WorkerBaseResponse(BaseModel):
     success: bool
-    strategy: str = "system"
     error: Optional[str] = None
-
-
-class ProcessTradingRequest(BaseModel):
-    action: str
 
 
 class ProcessTradingResponse(WorkerBaseResponse):
     result: Optional[Dict[str, Any]] = None
 
 
+class BotEvent(BaseModel):
+    ts: int
+    mobile: str
+    domain: str
+    strategy: str
+    run_mode: str
+    event: str
+    payload: Dict[str, Any] = Field(default_factory=dict)
+
+
 class LatestSignalsResponse(WorkerBaseResponse):
-    signals: List[TradingSignal] = Field(default_factory=list)
+    signals: List[BotEvent] = Field(default_factory=list)

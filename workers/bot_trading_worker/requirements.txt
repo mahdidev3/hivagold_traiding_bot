@@ -1,6 +1,5 @@
 fastapi
 uvicorn
-redis
 requests
 websockets
 pydantic
