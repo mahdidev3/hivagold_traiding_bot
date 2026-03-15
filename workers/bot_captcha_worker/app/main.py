@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 from logging import Logger
 
@@ -8,8 +9,6 @@ from .logging_setup import setup_logger
 from .service import (
     CaptchaSolverService,
 )
-
-from .queue_manager import CaptchaQueueManager
 from .schemas import HealthResponse, SolveRequest, SolveResponse
 from config import get_config
 
@@ -20,16 +19,13 @@ captcha_solver_service = CaptchaSolverService(
     code_length=config.CAPTCHA_CODE_LENGTH,
     max_retry=config.CAPTCHA_SOLVER_MAX_RETRY,
 )
-queue_manager = CaptchaQueueManager(captcha_solver_service, logger)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting captcha queue manager")
-    await queue_manager.start()
+    logger.info("Starting captcha worker")
     yield
-    logger.info("Stopping captcha queue manager")
-    await queue_manager.stop()
+    logger.info("Stopping captcha worker")
 
 
 app = FastAPI(
@@ -100,7 +96,7 @@ async def solve(payload: SolveRequest):
         if not image_bytes:
             raise HTTPException(status_code=400, detail="Empty file")
 
-        code = await queue_manager.enqueue(image_bytes)
+        code = await asyncio.to_thread(captcha_solver_service.solve_from_bytes, image_bytes)
         logger.info("Solve request finished code_length=%s", len(code))
         return SolveResponse(code=code)
     except HTTPException:

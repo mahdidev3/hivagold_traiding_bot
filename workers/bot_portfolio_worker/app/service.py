@@ -7,8 +7,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-import redis
-
 from config import Config
 
 
@@ -40,13 +38,8 @@ class PortfolioWorkerService:
         self._lock = asyncio.Lock()
         self._running = False
         self._consumer_task: Optional[asyncio.Task] = None
-        self.redis_client = redis.Redis(
-            host=config.REDIS_HOST,
-            port=config.REDIS_PORT,
-            db=config.REDIS_DB,
-            password=config.REDIS_PASSWORD or None,
-            decode_responses=True,
-        )
+        self.events_file = Path(getattr(config, "MARKET_EVENTS_FILE", "data/market_events.jsonl"))
+        self.events_file.parent.mkdir(parents=True, exist_ok=True)
 
     async def start(self):
         self._init_db()
@@ -346,22 +339,29 @@ class PortfolioWorkerService:
         )
 
     async def _event_consumer_loop(self):
-        pubsub = self.redis_client.pubsub(ignore_subscribe_messages=True)
-        pubsub.subscribe(self.config.REDIS_MARKET_EVENT_CHANNEL)
+        last_pos = 0
         try:
             while self._running:
-                message = await asyncio.to_thread(pubsub.get_message, 1.0)
-                if not message:
+                if not self.events_file.exists():
                     await asyncio.sleep(0.1)
                     continue
-                try:
-                    event = json.loads(message["data"])
-                except Exception:
+                with self.events_file.open("r", encoding="utf-8") as f:
+                    f.seek(last_pos)
+                    lines = f.readlines()
+                    last_pos = f.tell()
+                if not lines:
+                    await asyncio.sleep(0.2)
                     continue
-                await self.on_market_event(event)
+                for line in lines:
+                    try:
+                        record = json.loads(line)
+                        if record.get("channel") != self.config.REDIS_MARKET_EVENT_CHANNEL:
+                            continue
+                        event = record.get("event") or {}
+                    except Exception:
+                        continue
+                    await self.on_market_event(event)
         except asyncio.CancelledError:
             raise
         except Exception as exc:
             self.logger.warning("portfolio event consumer reconnect: %s", exc)
-        finally:
-            await asyncio.to_thread(pubsub.close)

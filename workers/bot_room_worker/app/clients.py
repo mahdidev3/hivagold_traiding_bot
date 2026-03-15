@@ -1,6 +1,6 @@
 import logging
 from typing import Any, Dict, Optional, Tuple
-import redis
+from pathlib import Path
 import json
 import requests
 from urllib.parse import urlparse
@@ -55,23 +55,30 @@ def domain_key_candidates(domain: str) -> list[str]:
 
 
 class HivagoldRedisClient:
-    """
-    Redis client for storing and retrieving Hivagold session data (cookies and headers).
-    Similar to the one in bot_auth_worker.
-    """
+    """Backward-compatible JSON session storage client."""
 
-    def __init__(self, redis_pool: redis.ConnectionPool, logger: logging.Logger):
-        self.redis_pool = redis_pool
+    def __init__(self, cache_file: Path, logger: logging.Logger):
+        self.cache_file = cache_file
         self.logger = logger
+        self.cache_file.parent.mkdir(parents=True, exist_ok=True)
 
-    def _redis_connection(self) -> redis.Redis:
-        return redis.Redis(connection_pool=self.redis_pool, decode_responses=True)
+    def _read(self) -> Dict[str, Any]:
+        if not self.cache_file.exists():
+            return {}
+        try:
+            data = json.loads(self.cache_file.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _write(self, data: Dict[str, Any]) -> None:
+        self.cache_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def save_session_data(
         self, mobile: str, session_data: Dict[str, Any], base_domain: str, ttl: int
     ) -> bool:
         """
-        Save session data (cookies, headers) in Redis as JSON.
+        Save session data (cookies, headers) in JSON cache as JSON.
 
         Args:
             mobile: User mobile number
@@ -83,24 +90,23 @@ class HivagoldRedisClient:
             Boolean indicating success
         """
         try:
-            conn = self._redis_connection()
-            serialized = json.dumps(session_data)
+            all_data = self._read()
             normalized_mobile = normalize_mobile(mobile)
             normalized_domain = normalize_domain_key(base_domain)
-            result = conn.setex(
-                f"{normalized_domain}:{normalized_mobile}", ttl, serialized
-            )
-            self.logger.info(f"Saved session data for {mobile} in Redis")
-            return bool(result)
+            _ = ttl
+            all_data[f"{normalized_domain}:{normalized_mobile}"] = session_data
+            self._write(all_data)
+            self.logger.info(f"Saved session data for {mobile} in JSON cache")
+            return True
         except Exception as e:
-            self.logger.error(f"Failed to save session data in Redis: {str(e)}")
+            self.logger.error(f"Failed to save session data in JSON cache: {str(e)}")
             return False
 
     def get_session_data(
         self, mobile: str, base_domain: str
     ) -> Optional[Dict[str, Any]]:
         """
-        Retrieve session data from Redis.
+        Retrieve session data from JSON cache.
 
         Args:
             mobile: User mobile number
@@ -110,7 +116,7 @@ class HivagoldRedisClient:
             Dictionary containing session data or None if not found
         """
         try:
-            conn = self._redis_connection()
+            all_data = self._read()
             normalized_mobile = normalize_mobile(mobile)
             mobile_candidates = [normalized_mobile, (mobile or "").strip()]
             for domain_candidate in domain_key_candidates(base_domain):
@@ -119,21 +125,21 @@ class HivagoldRedisClient:
                         continue
                     redis_key = f"{domain_candidate}:{mobile_candidate}"
                     self.logger.info(redis_key)
-                    data = conn.get(redis_key)
+                    data = all_data.get(redis_key)
                     if not data:
                         continue
                     session_data = json.loads(data)
-                    self.logger.debug(f"Retrieved session data for {mobile} from Redis")
+                    self.logger.debug(f"Retrieved session data for {mobile} from JSON cache")
                     return session_data
-            self.logger.debug(f"No session data found for {mobile} in Redis")
+            self.logger.debug(f"No session data found for {mobile} in JSON cache")
             return None
         except Exception as e:
-            self.logger.error(f"Failed to retrieve session data from Redis: {str(e)}")
+            self.logger.error(f"Failed to retrieve session data from JSON cache: {str(e)}")
             return None
 
     def delete_session_data(self, mobile: str, base_domain: str) -> bool:
         """
-        Delete session data from Redis.
+        Delete session data from JSON cache.
 
         Args:
             mobile: User mobile number
@@ -143,7 +149,7 @@ class HivagoldRedisClient:
             Boolean indicating success
         """
         try:
-            conn = self._redis_connection()
+            all_data = self._read()
             normalized_mobile = normalize_mobile(mobile)
             mobile_candidates = [normalized_mobile, (mobile or "").strip()]
             redis_keys: list[str] = []
@@ -157,11 +163,16 @@ class HivagoldRedisClient:
                     unique_keys.append(key)
             if not unique_keys:
                 return False
-            result = conn.delete(*unique_keys)
-            self.logger.info(f"Deleted session data for {mobile} from Redis")
-            return bool(result)
+            deleted = 0
+            for key in unique_keys:
+                if key in all_data:
+                    deleted += 1
+                    all_data.pop(key, None)
+            self._write(all_data)
+            self.logger.info(f"Deleted session data for {mobile} from JSON cache")
+            return bool(deleted)
         except Exception as e:
-            self.logger.error(f"Failed to delete session data from Redis: {str(e)}")
+            self.logger.error(f"Failed to delete session data from JSON cache: {str(e)}")
             return False
 
 
@@ -169,7 +180,7 @@ class PortfolioClient:
     """
     HTTP client for communicating with portfolio service.
     Handles portfolio creation, management, and balance operations.
-    Manages cookies from Redis and updates them after each request.
+    Manages cookies from JSON cache and updates them after each request.
     """
 
     def __init__(
@@ -270,7 +281,7 @@ class PortfolioClient:
                 if headers:
                     session_data["headers"] = headers
                 self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                    mobile, session_data, base_domain, self.config.SESSION_CACHE_TTL
                 )
 
             return self._parse_response_json(response)
@@ -336,7 +347,7 @@ class PortfolioClient:
                 if headers:
                     session_data["headers"] = headers
                 self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                    mobile, session_data, base_domain, self.config.SESSION_CACHE_TTL
                 )
 
             return self._parse_response_json(response)
@@ -392,7 +403,7 @@ class PortfolioClient:
                 if headers:
                     session_data["headers"] = headers
                 self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                    mobile, session_data, base_domain, self.config.SESSION_CACHE_TTL
                 )
 
             return self._parse_response_json(response)
@@ -448,7 +459,7 @@ class PortfolioClient:
                 if headers:
                     session_data["headers"] = headers
                 self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                    mobile, session_data, base_domain, self.config.SESSION_CACHE_TTL
                 )
 
             return self._parse_response_json(response)
@@ -506,7 +517,7 @@ class PortfolioClient:
                 if headers:
                     session_data["headers"] = headers
                 self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                    mobile, session_data, base_domain, self.config.SESSION_CACHE_TTL
                 )
 
             return self._parse_response_json(response)
@@ -569,7 +580,7 @@ class PortfolioClient:
                 if headers:
                     session_data["headers"] = headers
                 self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                    mobile, session_data, base_domain, self.config.SESSION_CACHE_TTL
                 )
 
             return self._parse_response_json(response)
@@ -582,7 +593,7 @@ class OrdersClient:
     """
     HTTP client for communicating with orders service.
     Handles order creation, retrieval, and closure operations.
-    Manages cookies from Redis and updates them after each request.
+    Manages cookies from JSON cache and updates them after each request.
     """
 
     def __init__(
@@ -717,7 +728,7 @@ class OrdersClient:
                 if headers:
                     session_data["headers"] = headers
                 self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                    mobile, session_data, base_domain, self.config.SESSION_CACHE_TTL
                 )
 
             return self._parse_response_json(response)
@@ -773,7 +784,7 @@ class OrdersClient:
                 if headers:
                     session_data["headers"] = headers
                 self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                    mobile, session_data, base_domain, self.config.SESSION_CACHE_TTL
                 )
 
             return self._parse_response_json(response)
@@ -834,7 +845,7 @@ class OrdersClient:
                 if headers:
                     session_data["headers"] = headers
                 self.redis_client.save_session_data(
-                    mobile, session_data, base_domain, self.config.REDIS_LOGIN_DATA_TTL
+                    mobile, session_data, base_domain, self.config.SESSION_CACHE_TTL
                 )
 
             return self._parse_response_json(response)
@@ -854,16 +865,10 @@ def build_clients(
         config: Configuration object containing client settings
 
     Returns:
-        Tuple containing (redis_client, portfolio_client, orders_client)
+        Tuple containing (session_cache_client, portfolio_client, orders_client)
     """
-    redis_pool = redis.ConnectionPool(
-        host=config.REDIS_HOST,
-        port=config.REDIS_PORT,
-        db=config.REDIS_DB,
-        password=config.REDIS_PASSWORD,
-        decode_responses=True,
-    )
-    redis_client = HivagoldRedisClient(redis_pool, logger)
+    cache_file = Path(getattr(config, "SESSION_CACHE_FILE", "data/room_sessions.json"))
+    redis_client = HivagoldRedisClient(cache_file, logger)
     portfolio_client = PortfolioClient(redis_client, config, logger)
     orders_client = OrdersClient(redis_client, config, logger)
 

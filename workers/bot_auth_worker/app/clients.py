@@ -1,8 +1,8 @@
 import logging
 import time
 from typing import Any, Optional, Tuple
-import redis
 import json
+from pathlib import Path
 import requests
 from urllib.parse import urlparse
 from config import Config
@@ -310,85 +310,87 @@ class CaptchaWorkerClient:
         ) from last_exc
 
 
-class RedisClient:
-    """
-    Redis wrapper that receives a Redis connection pool.
-    """
+class JsonSessionCacheClient:
+    """JSON-file backed session cache for auth data (cookies + headers)."""
 
-    def __init__(self, redis_pool: redis.ConnectionPool, logger: logging.Logger):
-        self.redis_pool = redis_pool
+    def __init__(self, cache_file: Path, logger: logging.Logger):
+        self.cache_file = cache_file
         self.logger = logger
+        self.cache_file.parent.mkdir(parents=True, exist_ok=True)
 
-    def _redis_connection(self) -> redis.Redis:
-        return redis.Redis(connection_pool=self.redis_pool, decode_responses=True)
+    def _read(self) -> dict[str, Any]:
+        if not self.cache_file.exists():
+            return {}
+        try:
+            data = json.loads(self.cache_file.read_text(encoding="utf-8"))
+            return data if isinstance(data, dict) else {}
+        except Exception:
+            return {}
+
+    def _write(self, data: dict[str, Any]) -> None:
+        self.cache_file.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    def _make_key(self, mobile: str, domain: str) -> str:
+        return f"{normalize_domain_key(domain)}:{normalize_mobile(mobile)}"
 
     def save_login_data(
         self, mobile: str, login_data: Any, domain: str, ttl: int
     ) -> bool:
-        """
-        Save login session data (cookies, headers) in Redis as JSON.
-        ttl default = 14 days
-        """
-        conn = self._redis_connection()
-        serialized = json.dumps(login_data)
-        normalized_mobile = normalize_mobile(mobile)
-        normalized_domain = normalize_domain_key(domain)
-        self.logger.debug(
-            "Saving login data in redis key=%s:%s ttl=%s",
-            normalized_domain,
-            normalized_mobile,
-            ttl,
-        )
-        return bool(
-            conn.setex(f"{normalized_domain}:{normalized_mobile}", ttl, serialized)
-        )
+        _ = ttl
+        data = self._read()
+        data[self._make_key(mobile, domain)] = {
+            "saved_at": int(time.time()),
+            "login_data": login_data,
+        }
+        self._write(data)
+        return True
 
     def get_login_data(self, mobile: str, domain: str) -> Optional[dict]:
-        conn = self._redis_connection()
         normalized_mobile = normalize_mobile(mobile)
         mobile_candidates = [normalized_mobile, (mobile or "").strip()]
+        data = self._read()
         for domain_candidate in domain_key_candidates(domain):
             for mobile_candidate in mobile_candidates:
                 if not mobile_candidate:
                     continue
-                redis_key = f"{domain_candidate}:{mobile_candidate}"
-                self.logger.info(redis_key)
-                data = conn.get(redis_key)
-                if not data:
+                cache_key = f"{domain_candidate}:{mobile_candidate}"
+                cached = data.get(cache_key)
+                if not cached:
                     continue
-                try:
-                    parsed = json.loads(data)
-                    self.logger.debug("Loaded redis login data for key=%s", redis_key)
-                    return parsed
-                except json.JSONDecodeError as exc:
-                    raise exc
+                login_data = cached.get("login_data") if isinstance(cached, dict) else cached
+                if isinstance(login_data, dict):
+                    self.logger.debug("Loaded login data from JSON cache key=%s", cache_key)
+                    return login_data
         self.logger.debug(
-            "No redis login data found for domain=%s mobile=%s", domain, mobile
+            "No JSON login data found for domain=%s mobile=%s", domain, mobile
         )
         return None
 
     def delete_login_data(self, mobile: str, domain: str) -> int:
-        conn = self._redis_connection()
         normalized_mobile = normalize_mobile(mobile)
         mobile_candidates = [normalized_mobile, (mobile or "").strip()]
-        redis_keys: list[str] = []
+        keys: list[str] = []
         for domain_candidate in domain_key_candidates(domain):
             for mobile_candidate in mobile_candidates:
                 if mobile_candidate:
-                    redis_keys.append(f"{domain_candidate}:{mobile_candidate}")
-        unique_keys: list[str] = []
-        for key in redis_keys:
-            if key not in unique_keys:
-                unique_keys.append(key)
+                    keys.append(f"{domain_candidate}:{mobile_candidate}")
+        unique_keys = list(dict.fromkeys(keys))
         if not unique_keys:
             return 0
-        return int(conn.delete(*unique_keys))
+        data = self._read()
+        deleted = 0
+        for key in unique_keys:
+            if key in data:
+                deleted += 1
+                data.pop(key, None)
+        self._write(data)
+        return deleted
 
 
 def build_clients(
     config: Config,
     logger: logging.Logger,
-) -> Tuple[MainApiClient, CaptchaWorkerClient, RedisClient]:
+) -> Tuple[MainApiClient, CaptchaWorkerClient, JsonSessionCacheClient]:
     """
     Build service clients from environment variables.
     """
@@ -396,22 +398,11 @@ def build_clients(
     captcha_timeout = config.CAPTCHA_WORKER_TIMEOUT_SECONDS
     captcha_retries = config.CAPTCHA_WORKER_MAX_RETRIES
 
-    redis_host = config.REDIS_HOST
-    redis_port = config.REDIS_PORT
-    redis_db = config.REDIS_DB
-    redis_password = config.REDIS_PASSWORD.strip() or None
-
-    redis_pool = redis.ConnectionPool(
-        host=redis_host,
-        port=redis_port,
-        db=redis_db,
-        password=redis_password,
-        decode_responses=True,
-    )
+    cache_file = Path(getattr(config, "SESSION_CACHE_FILE", "data/auth_sessions.json"))
     return (
         MainApiClient(config, logger),
         CaptchaWorkerClient(
             captcha_solve_url, logger, captcha_timeout, captcha_retries
         ),
-        RedisClient(redis_pool, logger),
+        JsonSessionCacheClient(cache_file, logger),
     )
