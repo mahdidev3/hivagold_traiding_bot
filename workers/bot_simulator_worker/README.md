@@ -2,20 +2,22 @@
 
 ## What this worker does
 
-`bot_simulator_worker` is a file-based execution simulator for bot trading. It stores positions/history and computes PnL without a real broker backend.
+`bot_simulator_worker` manages simulation tasks shaped as `<portfolio-user-market>`.  
+Each task has:
+- a unique `task_id`
+- a dedicated runtime thread (`sim-task-<task_id>`) for websocket market updates
+- initial/available units
+- many positions, each with unique `position_id`
 
-## How this worker is used
+All tasks and positions are logged as structured JSON files under:
+- `USERS_STORAGE_DIR/simulator/tasks/*.json`
+- `USERS_STORAGE_DIR/simulator/positions/*.json`
 
-- Called by `bot_trading_worker` when bot `run_mode` is `simulator`.
-- Useful for local development/backtesting-like integration.
-
-Default local base URL:
-
-- `http://localhost:8004`
+Supported markets: `mazaneh`, `ounce`, `mazaneh_xag`, `xag`.
 
 ## Authentication
 
-All endpoints except `GET /health` require API key header:
+All endpoints except `GET /health` require:
 
 ```http
 x-api-key: <BOT_API_KEY>
@@ -23,115 +25,64 @@ x-api-key: <BOT_API_KEY>
 
 ## APIs
 
-### `GET /health`
-Health probe.
-
-### `POST /portfolio/orders`
-Create simulated position.
+### `POST /simulator/tasks`
+Create `<portfolio-user-market>` simulation task.
 
 ```json
 {
-  "mobile": "09123456789",
+  "portfolio_id": "portfolio-0912",
+  "user_id": "09123456789",
+  "market": "xag",
   "domain": "https://hivagold.com",
+  "initial_units": 100
+}
+```
+
+### `POST /simulator/tasks/{task_id}/close`
+Close a task.
+
+### `POST /simulator/tasks/{task_id}/positions`
+Create position in a task.
+
+```json
+{
   "strategy": "ema_wall_v1",
-  "symbol": "xag",
   "side": "buy",
   "entry_type": "market",
   "entry_price": 31.2,
   "take_profit": 32.0,
   "stop_loss": 30.7,
-  "volume": 1.0
+  "units": 1.0
 }
 ```
 
-### `PATCH /portfolio/users/{mobile}/positions/{position_id}`
-Update TP/SL/entry/volume.
+### `PATCH /simulator/positions/{position_id}`
+Update a position.
 
-```json
-{
-  "take_profit": 32.1,
-  "stop_loss": 30.8,
-  "entry_price": 31.2,
-  "volume": 1.2
-}
-```
+### `POST /simulator/positions/{position_id}/stop-loss`
+Change stop loss only.
 
-### `POST /portfolio/users/{mobile}/positions/{position_id}/close`
+### `POST /simulator/positions/{position_id}/close`
 Close position.
 
-```json
-{
-  "close_price": 31.9,
-  "reason": "manual"
-}
-```
-
-### `POST /portfolio/price`
+### `POST /simulator/price`
 Feed market price tick.
 
 ```json
 {
-  "mobile": "09123456789",
-  "symbol": "xag",
+  "task_id": "portfolio-0912-09123456789-xag-ab12cd34",
+  "market": "xag",
   "price": 31.85
 }
 ```
 
-### `GET /portfolio/users/{mobile}/stats`
-Get user aggregated simulator stats.
+### `GET /simulator/tasks/{task_id}`
+Get task with all its positions.
 
-### `GET /portfolio/users/{mobile}/history`
-Get user simulated history.
+### `GET /simulator/db/records`
+Get full simulator storage view.
 
-### `GET /portfolio/db/records`
-Get all stored simulator records.
+## Notes
 
-### `GET /portfolio/strategies/{strategy}/pnl-positions`
-List positions and total PnL for a strategy.
-
-### `GET /portfolio/admin/db`
-Admin alias for full DB records.
-
-## Full API examples (curl)
-
-```bash
-API_KEY='changeme'
-
-# health
-curl http://localhost:8004/health
-
-# create position
-curl -X POST http://localhost:8004/portfolio/orders \
-  -H "x-api-key: ${API_KEY}" -H 'Content-Type: application/json' \
-  -d '{"mobile":"09123456789","domain":"https://hivagold.com","strategy":"ema_wall_v1","symbol":"xag","side":"buy","entry_type":"market","entry_price":31.2,"take_profit":32.0,"stop_loss":30.7,"volume":1.0}'
-
-# update position
-curl -X PATCH http://localhost:8004/portfolio/users/09123456789/positions/1 \
-  -H "x-api-key: ${API_KEY}" -H 'Content-Type: application/json' \
-  -d '{"take_profit":32.1,"stop_loss":30.8}'
-
-# close position
-curl -X POST http://localhost:8004/portfolio/users/09123456789/positions/1/close \
-  -H "x-api-key: ${API_KEY}" -H 'Content-Type: application/json' \
-  -d '{"close_price":31.9,"reason":"manual"}'
-
-# price tick
-curl -X POST http://localhost:8004/portfolio/price \
-  -H "x-api-key: ${API_KEY}" -H 'Content-Type: application/json' \
-  -d '{"mobile":"09123456789","symbol":"xag","price":31.85}'
-
-# user stats
-curl -H "x-api-key: ${API_KEY}" http://localhost:8004/portfolio/users/09123456789/stats
-
-# user history
-curl -H "x-api-key: ${API_KEY}" http://localhost:8004/portfolio/users/09123456789/history
-
-# db records
-curl -H "x-api-key: ${API_KEY}" http://localhost:8004/portfolio/db/records
-
-# strategy pnl report
-curl -H "x-api-key: ${API_KEY}" http://localhost:8004/portfolio/strategies/ema_wall_v1/pnl-positions
-
-# admin db
-curl -H "x-api-key: ${API_KEY}" http://localhost:8004/portfolio/admin/db
-```
+- Websocket price stream is opened per task when `domain` is provided.
+- WS path template is configurable by `WS_PRICE_PATH_TEMPLATE` (default: `/{market}/ws/{market}/price/`).

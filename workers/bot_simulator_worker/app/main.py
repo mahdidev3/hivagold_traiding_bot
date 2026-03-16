@@ -9,8 +9,11 @@ from .schemas import (
     HealthResponse,
     PositionCloseRequest,
     PositionCreateRequest,
+    PositionStopLossUpdateRequest,
     PositionUpdateRequest,
     PriceTickRequest,
+    SimulationTaskCloseRequest,
+    SimulationTaskCreateRequest,
 )
 from .service import SimulatorWorkerService
 
@@ -39,71 +42,67 @@ async def health():
     return HealthResponse(status="healthy", app_name=config.APP_NAME, version=config.APP_VERSION)
 
 
-@app.post("/portfolio/orders", response_model=GenericResultResponse)
-async def create_position(payload: PositionCreateRequest, _=Depends(require_api_key)):
+@app.post("/simulator/tasks", response_model=GenericResultResponse)
+async def create_simulation_task(payload: SimulationTaskCreateRequest, _=Depends(require_api_key)):
     try:
-        result = await service.create_position(payload.model_dump())
-        return {"success": True, "result": result}
+        return {"success": True, "result": await service.create_task(payload.model_dump())}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.patch("/portfolio/users/{mobile}/positions/{position_id}", response_model=GenericResultResponse)
-async def update_position(mobile: str, position_id: int, payload: PositionUpdateRequest, _=Depends(require_api_key)):
+@app.post("/simulator/tasks/{task_id}/close", response_model=GenericResultResponse)
+async def close_simulation_task(task_id: str, payload: SimulationTaskCloseRequest, _=Depends(require_api_key)):
     try:
-        result = await service.update_position(mobile, position_id, payload.model_dump())
-        return {"success": True, "result": result}
+        return {"success": True, "result": await service.close_task(task_id, payload.reason)}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.post("/portfolio/users/{mobile}/positions/{position_id}/close", response_model=GenericResultResponse)
-async def close_position(mobile: str, position_id: int, payload: PositionCloseRequest, _=Depends(require_api_key)):
+@app.post("/simulator/tasks/{task_id}/positions", response_model=GenericResultResponse)
+async def create_position(task_id: str, payload: PositionCreateRequest, _=Depends(require_api_key)):
     try:
-        result = await service.close_position(mobile, position_id, payload.close_price, payload.reason)
-        return {"success": True, "result": result}
+        return {"success": True, "result": await service.create_position(task_id, payload.model_dump())}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.post("/portfolio/price", response_model=GenericResultResponse)
-async def price_tick(payload: dict, _=Depends(require_api_key)):
+@app.patch("/simulator/positions/{position_id}", response_model=GenericResultResponse)
+async def update_position(position_id: str, payload: PositionUpdateRequest, _=Depends(require_api_key)):
     try:
-        mobile = payload.get("mobile") or payload.get("user_id")
-        data = PriceTickRequest.model_validate(payload)
-        result = await service.process_price_tick(mobile, data.price, symbol=data.symbol)
-        return {"success": True, "result": result}
+        return {"success": True, "result": await service.update_position(position_id, payload.model_dump())}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.get("/portfolio/users/{mobile}/stats", response_model=GenericResultResponse)
-async def user_stats(mobile: str, _=Depends(require_api_key)):
-    return {"success": True, "result": service.user_stats(mobile)}
+@app.post("/simulator/positions/{position_id}/stop-loss", response_model=GenericResultResponse)
+async def change_stop_loss(position_id: str, payload: PositionStopLossUpdateRequest, _=Depends(require_api_key)):
+    try:
+        return {"success": True, "result": await service.change_stop_loss(position_id, payload.stop_loss)}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.get("/portfolio/users/{mobile}/history", response_model=GenericResultResponse)
-async def user_history(mobile: str, _=Depends(require_api_key)):
-    return {"success": True, "result": service.user_history(mobile)}
+@app.post("/simulator/positions/{position_id}/close", response_model=GenericResultResponse)
+async def close_position(position_id: str, payload: PositionCloseRequest, _=Depends(require_api_key)):
+    try:
+        return {"success": True, "result": await service.close_position(position_id, payload.close_price, payload.reason)}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.get("/portfolio/db/records", response_model=GenericResultResponse)
+@app.post("/simulator/price", response_model=GenericResultResponse)
+async def price_tick(payload: PriceTickRequest, _=Depends(require_api_key)):
+    try:
+        return {"success": True, "result": await service.process_price_tick(payload.task_id, payload.market, payload.price, source="api")}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/simulator/tasks/{task_id}", response_model=GenericResultResponse)
+async def task_info(task_id: str, _=Depends(require_api_key)):
+    return {"success": True, "result": service.task_info(task_id)}
+
+
+@app.get("/simulator/db/records", response_model=GenericResultResponse)
 async def db_records(_=Depends(require_api_key)):
-    return {"success": True, "result": service.all_records()}
-
-
-@app.get("/portfolio/strategies/{strategy}/pnl-positions", response_model=GenericResultResponse)
-async def strategy_positions(strategy: str, _=Depends(require_api_key)):
-    records = service.all_records()
-    matched = []
-    for mobile, user_data in records.get("users", {}).items():
-        for pos in user_data.get("history", {}).get("positions", []):
-            if pos.get("strategy") == strategy:
-                matched.append(pos)
-    total_pnl = sum(float(p.get("pnl") or 0) for p in matched if p.get("status") == "closed")
-    return {"success": True, "result": {"strategy": strategy, "positions": matched, "total_pnl": round(total_pnl, 4)}}
-
-
-@app.get("/portfolio/admin/db", response_model=GenericResultResponse)
-async def admin_db(_=Depends(require_api_key)):
     return {"success": True, "result": service.all_records()}
