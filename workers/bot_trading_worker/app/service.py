@@ -10,6 +10,8 @@ from uuid import uuid4
 
 import requests
 
+from .strategies import SimplePositionTestStrategy, StrategySignal
+
 
 @dataclass
 class StrategySpec:
