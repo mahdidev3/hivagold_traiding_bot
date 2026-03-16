@@ -1,3 +1,24 @@
 {
-  "sessions": {}
+  "sessions": {
+    "hivagold.com": {
+      "cookies": {
+        "csrftoken": "tTo1UDWgzaajiHIz1v9cC9y3OWP9axGx",
+        "sessionid": "ud3d51g7bvkp19gr9q1pfitjxlap4ic8"
+      },
+      "headers": {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+        "Accept": "*/*",
+        "Accept-Language": "en-GB,en-US;q=0.9,en;q=0.8,fa;q=0.7",
+        "Content-Type": "application/json",
+        "Priority": "u=1, i",
+        "Sec-CH-UA": "\"Not:A-Brand\";v=\"99\", \"Google Chrome\";v=\"145\", \"Chromium\";v=\"145\"",
+        "Sec-CH-UA-Mobile": "?0",
+        "Sec-CH-UA-Platform": "\"Windows\"",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+        "X-Csrftoken": "tTo1UDWgzaajiHIz1v9cC9y3OWP9axGx"
+      }
+    }
+  }
 }

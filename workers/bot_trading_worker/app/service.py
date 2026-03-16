@@ -11,8 +11,25 @@ from urllib.parse import urlparse
 import requests
 
 from config import Config
-from .clients import BadRequestError, MarketDataClient, SessionStore, TradingExecutionClient, UserContext, cookie_header, normalize_base_url, normalize_domain, normalize_mobile, utc_now_ts
-from .modules import EmaWallStrategyModule, SimplePositionTestStrategyModule, MarketSnapshot, StrategyAction, StrategyContext
+from .clients import (
+    BadRequestError,
+    MarketDataClient,
+    SessionStore,
+    TradingExecutionClient,
+    UserContext,
+    cookie_header,
+    normalize_base_url,
+    normalize_domain,
+    normalize_mobile,
+    utc_now_ts,
+)
+from .modules import (
+    EmaWallStrategyModule,
+    SimplePositionTestStrategyModule,
+    MarketSnapshot,
+    StrategyAction,
+    StrategyContext,
+)
 
 LIVE_SUB_MESSAGE = {"action": "SubAdd", "subs": ["0~hivagold~xag~gold"]}
 PRICE_PING_MESSAGE = {"type": "ping"}
@@ -53,7 +70,14 @@ class BotThreadConfig:
 
 
 class TradingWorkerService:
-    def __init__(self, config: Config, session_store: SessionStore, market_client: MarketDataClient, execution_client: TradingExecutionClient, logger: logging.Logger | None = None):
+    def __init__(
+        self,
+        config: Config,
+        session_store: SessionStore,
+        market_client: MarketDataClient,
+        execution_client: TradingExecutionClient,
+        logger: logging.Logger | None = None,
+    ):
         self.config = config
         self.session_store = session_store
         self.market_client = market_client
@@ -66,7 +90,9 @@ class TradingWorkerService:
         self._bot_configs: dict[str, BotThreadConfig] = {}
         self._latest_events: dict[str, dict[str, Any]] = {}
         self._task_logs: dict[str, list[dict[str, Any]]] = {}
-        self._strategies: dict[str, Any] = {EmaWallStrategyModule.name: EmaWallStrategyModule(config)}
+        self._strategies: dict[str, Any] = {
+            EmaWallStrategyModule.name: EmaWallStrategyModule(config)
+        }
         self._bots_cache_mtime: float | None = None
         self._bots_cache: list[BotThreadConfig] = []
 
@@ -104,20 +130,30 @@ class TradingWorkerService:
                 continue
             bot = BotThreadConfig(
                 user_id=str(item.get("user_id", item.get("mobile", ""))).strip(),
-                portfolio_id=str(item.get("portfolio_id", item.get("metadata", {}).get("portfolio_id", ""))).strip(),
-                market=str(item.get("market", item.get("room", "xag"))).strip() or "xag",
+                portfolio_id=str(
+                    item.get(
+                        "portfolio_id", item.get("metadata", {}).get("portfolio_id", "")
+                    )
+                ).strip(),
+                market=str(item.get("market", item.get("room", "xag"))).strip()
+                or "xag",
                 strategy=str(item.get("strategy", "pending")).strip() or "pending",
-                simulator_task_id=str(item.get("simulator_task_id", "")).strip() or None,
+                simulator_task_id=str(item.get("simulator_task_id", "")).strip()
+                or None,
                 mobile=normalize_mobile(str(item.get("mobile", "")).strip()),
                 password=str(item.get("password", "")).strip(),
                 domain=str(item.get("domain", "")).strip(),
                 run_mode=str(item.get("run_mode", "simulator")).strip() or "simulator",
                 active=bool(item.get("active", True)),
                 task_id=str(item.get("task_id", "")).strip(),
-                metadata=item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
+                metadata=item.get("metadata")
+                if isinstance(item.get("metadata"), dict)
+                else {},
             )
             if not bot.task_id:
-                bot.task_id = self._build_task_id(bot.portfolio_id, bot.market, bot.strategy, bot.user_id)
+                bot.task_id = self._build_task_id(
+                    bot.portfolio_id, bot.market, bot.strategy, bot.user_id
+                )
             if bot.user_id and bot.portfolio_id and bot.market:
                 bots.append(bot)
         self._bots_cache_mtime = stat.st_mtime
@@ -173,9 +209,26 @@ class TradingWorkerService:
         if action == "stop":
             return {"success": True, "result": await self.stop()}
         if action == "status":
-            return {"success": True, "result": {"running": self._running, "active_bots": [self._active_bot_info(key) for key in self._user_tasks], "configured_bots": len(self._bot_configs)}}
+            return {
+                "success": True,
+                "result": {
+                    "running": self._running,
+                    "active_bots": [
+                        self._active_bot_info(key) for key in self._user_tasks
+                    ],
+                    "configured_bots": len(self._bot_configs),
+                },
+            }
         if action == "list_bots":
-            return {"success": True, "result": {"bots": [self._bot_to_dict(cfg) | {"bot_id": bot_id} for bot_id, cfg in self._bot_configs.items()]}}
+            return {
+                "success": True,
+                "result": {
+                    "bots": [
+                        self._bot_to_dict(cfg) | {"bot_id": bot_id}
+                        for bot_id, cfg in self._bot_configs.items()
+                    ]
+                },
+            }
         if action == "activate_bot":
             return await self._toggle_bot(args, activate=True)
         if action == "deactivate_bot":
@@ -192,7 +245,10 @@ class TradingWorkerService:
         market = str(args.get("market", args.get("room", ""))).strip()
         strategy = str(args.get("strategy", "pending")).strip() or "pending"
         if not user_id or not portfolio_id or not market or not strategy:
-            return {"success": False, "error": "user_id, portfolio_id, market and strategy are required"}
+            return {
+                "success": False,
+                "error": "user_id, portfolio_id, market and strategy are required",
+            }
 
         task_id = self._build_task_id(portfolio_id, market, strategy, user_id)
 
@@ -210,7 +266,9 @@ class TradingWorkerService:
             run_mode=str(args.get("run_mode", "simulator")).strip() or "simulator",
             active=bool(args.get("active", False)),
             task_id=task_id,
-            metadata=args.get("metadata") if isinstance(args.get("metadata"), dict) else {},
+            metadata=args.get("metadata")
+            if isinstance(args.get("metadata"), dict)
+            else {},
         )
         bot_id = self._new_bot_id()
         self._bot_configs[bot_id] = bot
@@ -230,10 +288,17 @@ class TradingWorkerService:
             task.cancel()
         return {
             "success": True,
-            "result": {"removed": True, "bot_id": bot_id, "mobile": bot.mobile, "domain": bot.domain},
+            "result": {
+                "removed": True,
+                "bot_id": bot_id,
+                "mobile": bot.mobile,
+                "domain": bot.domain,
+            },
         }
 
-    def _build_task_id(self, portfolio_id: str, market: str, strategy: str, user_id: str) -> str:
+    def _build_task_id(
+        self, portfolio_id: str, market: str, strategy: str, user_id: str
+    ) -> str:
         task_key = f"{portfolio_id}|{market}|{strategy}|{user_id}".lower().strip()
         digest = hashlib.sha1(task_key.encode("utf-8")).hexdigest()[:16]
         return f"task-{digest}"
@@ -249,14 +314,27 @@ class TradingWorkerService:
         ]
         if not bots:
             return {"success": False, "error": "Task not found"}
-        active_bot_ids = [bot["bot_id"] for bot in bots if bot["bot_id"] in self._user_tasks]
-        return {"success": True, "result": {"task_id": task_id, "bot_count": len(bots), "active_bot_ids": active_bot_ids, "bots": bots}}
+        active_bot_ids = [
+            bot["bot_id"] for bot in bots if bot["bot_id"] in self._user_tasks
+        ]
+        return {
+            "success": True,
+            "result": {
+                "task_id": task_id,
+                "bot_count": len(bots),
+                "active_bot_ids": active_bot_ids,
+                "bots": bots,
+            },
+        }
 
     def _get_task_logs(self, args: Dict[str, Any]) -> Dict[str, Any]:
         task_id = str(args.get("task_id", "")).strip()
         if not task_id:
             return {"success": False, "error": "task_id is required"}
-        return {"success": True, "result": {"task_id": task_id, "logs": self._task_logs.get(task_id, [])}}
+        return {
+            "success": True,
+            "result": {"task_id": task_id, "logs": self._task_logs.get(task_id, [])},
+        }
 
     async def _toggle_bot(self, args: Dict[str, Any], activate: bool) -> Dict[str, Any]:
         bot_id = self._resolve_bot_id(args)
@@ -274,7 +352,16 @@ class TradingWorkerService:
             if task:
                 task.cancel()
 
-        return {"success": True, "result": {"bot_id": bot_id, "mobile": bot.mobile, "domain": bot.domain, "strategy": bot.strategy, "active": bot.active}}
+        return {
+            "success": True,
+            "result": {
+                "bot_id": bot_id,
+                "mobile": bot.mobile,
+                "domain": bot.domain,
+                "strategy": bot.strategy,
+                "active": bot.active,
+            },
+        }
 
     def _resolve_bot_id(self, args: Dict[str, Any]) -> Optional[str]:
         bot_id = str(args.get("bot_id", "")).strip()
@@ -287,7 +374,11 @@ class TradingWorkerService:
         run_mode = str(args.get("run_mode", "")).strip()
         task_id = str(args.get("task_id", "")).strip()
         if task_id:
-            matches = [candidate_id for candidate_id, bot in self._bot_configs.items() if bot.task_id == task_id]
+            matches = [
+                candidate_id
+                for candidate_id, bot in self._bot_configs.items()
+                if bot.task_id == task_id
+            ]
             return matches[0] if len(matches) == 1 else None
         if not (mobile and domain):
             return None
@@ -312,7 +403,9 @@ class TradingWorkerService:
 
     def _ensure_bot_active(self, bot_id: str, bot: BotThreadConfig) -> str:
         if bot_id not in self._user_tasks:
-            self._user_tasks[bot_id] = asyncio.create_task(self._run_bot(bot), name=bot_id)
+            self._user_tasks[bot_id] = asyncio.create_task(
+                self._run_bot(bot), name=bot_id
+            )
         return bot_id
 
     def _active_bot_info(self, key: str) -> dict[str, Any]:
@@ -363,24 +456,38 @@ class TradingWorkerService:
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
-                await self._publish_event(self._event(bot, "runtime_error", {"error": str(exc)}))
+                await self._publish_event(
+                    self._event(bot, "runtime_error", {"error": str(exc)})
+                )
                 await asyncio.sleep(3)
 
     async def _run_user_session(self, user: UserContext, bot: BotThreadConfig) -> None:
         session_data = self.session_store.get_session_data(user.mobile, user.domain)
         if not session_data or not isinstance(session_data, dict):
-            await self._publish_event(self._event(bot, "session_error", {"error": "Session not found in file storage"}))
+            await self._publish_event(
+                self._event(
+                    bot, "session_error", {"error": "Session not found in file storage"}
+                )
+            )
             await asyncio.sleep(5)
             return
 
         cookies = session_data.get("cookies") or {}
-        headers = session_data.get("headers") if isinstance(session_data.get("headers"), dict) else {}
+        headers = (
+            session_data.get("headers")
+            if isinstance(session_data.get("headers"), dict)
+            else {}
+        )
         if not isinstance(cookies, dict) or not cookies:
-            await self._publish_event(self._event(bot, "session_error", {"error": "Cookies missing"}))
+            await self._publish_event(
+                self._event(bot, "session_error", {"error": "Cookies missing"})
+            )
             await asyncio.sleep(5)
             return
 
-        http_session = self.market_client.build_http_session(cookies, user.domain, headers=headers)
+        http_session = self.market_client.build_http_session(
+            cookies, user.domain, headers=headers
+        )
         http_session.headers["X-Mobile"] = user.mobile
         await asyncio.to_thread(self.market_client.warmup, http_session, user.domain)
 
@@ -390,13 +497,24 @@ class TradingWorkerService:
         ws_urls = self._ws_urls(user.domain, bot)
 
         tasks = [
-            asyncio.create_task(self._bars_loop(user, bot, http_session, state, session_stop_event)),
+            asyncio.create_task(
+                self._bars_loop(user, bot, http_session, state, session_stop_event)
+            ),
         ]
         stream_handlers = {
-            "live-bars": (lambda msg: self._on_live_bars_message(bot, msg, state), self._on_open_live),
-            "price": (lambda msg: self._on_price_message(bot, user, msg, state, http_session), self._on_open_price),
+            "live-bars": (
+                lambda msg: self._on_live_bars_message(bot, msg, state),
+                self._on_open_live,
+            ),
+            "price": (
+                lambda msg: self._on_price_message(bot, user, msg, state, http_session),
+                self._on_open_price,
+            ),
             "wall": (lambda msg: self._on_wall_message(bot, msg, state), None),
-            "external-price": (lambda msg: self._on_external_price_message(bot, msg, state), None),
+            "external-price": (
+                lambda msg: self._on_external_price_message(bot, msg, state),
+                None,
+            ),
         }
         for stream_name, stream_url in ws_urls.items():
             handler, on_open = stream_handlers[stream_name]
@@ -409,7 +527,9 @@ class TradingWorkerService:
                         session_stop_event,
                         on_message=handler,
                         on_open=on_open,
-                        on_disconnect=lambda reason, stream=stream_name: self._on_ws_disconnect(bot, stream, reason),
+                        on_disconnect=lambda reason, stream=stream_name: (
+                            self._on_ws_disconnect(bot, stream, reason)
+                        ),
                     )
                 )
             )
@@ -427,7 +547,6 @@ class TradingWorkerService:
                 except Exception:
                     pass
 
-
     def _resolve_strategy(self, bot: BotThreadConfig):
         return self._strategies.get(bot.strategy)
 
@@ -437,7 +556,13 @@ class TradingWorkerService:
         keep_keys = sorted(state.bars_by_ts.keys())[-MAX_BARS_BUFFER:]
         state.bars_by_ts = {k: state.bars_by_ts[k] for k in keep_keys}
 
-    async def _apply_strategy(self, bot: BotThreadConfig, user: UserContext, session: requests.Session, state: RuntimeState) -> None:
+    async def _apply_strategy(
+        self,
+        bot: BotThreadConfig,
+        user: UserContext,
+        session: requests.Session,
+        state: RuntimeState,
+    ) -> None:
         strategy = self._resolve_strategy(bot)
         if strategy is None:
             return
@@ -464,11 +589,25 @@ class TradingWorkerService:
         actions = strategy.on_market_update(snapshot, context)
         if not actions:
             return
-        await self._publish_event(self._event(bot, "strategy_actions", {"count": len(actions), "strategy": strategy.name}))
+        await self._publish_event(
+            self._event(
+                bot,
+                "strategy_actions",
+                {"count": len(actions), "strategy": strategy.name},
+            )
+        )
         await self._execute_actions(bot, user, session, actions, state)
 
-    async def _execute_actions(self, bot: BotThreadConfig, user: UserContext, session: requests.Session, actions: list[StrategyAction], state: RuntimeState) -> None:
+    async def _execute_actions(
+        self,
+        bot: BotThreadConfig,
+        user: UserContext,
+        session: requests.Session,
+        actions: list[StrategyAction],
+        state: RuntimeState,
+    ) -> None:
         for action in actions:
+            payload = dict(action.payload)
             try:
                 result: dict[str, Any]
                 if action.operation == "create_order":
@@ -476,27 +615,92 @@ class TradingWorkerService:
                     payload.setdefault("user_id", user.mobile)
                     if bot.simulator_task_id:
                         payload.setdefault("simulator_task_id", bot.simulator_task_id)
-                    result = await asyncio.to_thread(self.execution_client.create_order, run_mode=bot.run_mode, session=session, domain=user.domain, payload=payload)
-                    state.open_orders.append(result.get("result") if isinstance(result.get("result"), dict) else payload)
+                    result = await asyncio.to_thread(
+                        self.execution_client.create_order,
+                        run_mode=bot.run_mode,
+                        session=session,
+                        domain=user.domain,
+                        payload=payload,
+                    )
+                    state.open_orders.append(
+                        result.get("result")
+                        if isinstance(result.get("result"), dict)
+                        else payload
+                    )
                 elif action.operation == "update_order":
                     order_id = action.payload.get("order_id")
                     if order_id is None:
                         continue
-                    payload = {k: v for k, v in action.payload.items() if k not in {"order_id", "mobile", "domain", "room", "strategy", "portfolio_id"}}
-                    result = await asyncio.to_thread(self.execution_client.update_order, run_mode=bot.run_mode, session=session, domain=user.domain, order_id=order_id, payload=payload)
+                    payload = {
+                        k: v
+                        for k, v in action.payload.items()
+                        if k
+                        not in {
+                            "order_id",
+                            "mobile",
+                            "domain",
+                            "room",
+                            "strategy",
+                            "portfolio_id",
+                        }
+                    }
+                    result = await asyncio.to_thread(
+                        self.execution_client.update_order,
+                        run_mode=bot.run_mode,
+                        session=session,
+                        domain=user.domain,
+                        order_id=order_id,
+                        payload=payload,
+                    )
                 elif action.operation == "close_order":
                     order_id = action.payload.get("order_id")
                     if order_id is None:
                         continue
-                    result = await asyncio.to_thread(self.execution_client.close_order, run_mode=bot.run_mode, session=session, domain=user.domain, order_id=order_id, close_price=action.payload.get("close_price"), reason=action.reason)
-                    state.open_orders = [o for o in state.open_orders if (o.get("id") or o.get("position_id")) != order_id]
+                    result = await asyncio.to_thread(
+                        self.execution_client.close_order,
+                        run_mode=bot.run_mode,
+                        session=session,
+                        domain=user.domain,
+                        order_id=order_id,
+                        close_price=action.payload.get("close_price"),
+                        reason=action.reason,
+                    )
+                    state.open_orders = [
+                        o
+                        for o in state.open_orders
+                        if (o.get("id") or o.get("position_id")) != order_id
+                    ]
                 else:
-                    continue
-                await self._publish_event(self._event(bot, "strategy_order", {"operation": action.operation, "reason": action.reason, "result": result}))
+                    await self._publish_event(
+                        self._event(
+                            bot,
+                            "unknown_operation",
+                            {"action": action.operation},
+                        )
+                    )
+                await self._publish_event(
+                    self._event(
+                        bot,
+                        "strategy_order",
+                        {
+                            "operation": action.operation,
+                            "reason": action.reason,
+                            "result": result,
+                        },
+                    )
+                )
             except Exception as exc:
-                await self._publish_event(self._event(bot, "strategy_order_error", {"operation": action.operation, "error": str(exc)}))
+                await self._publish_event(
+                    self._event(
+                        bot,
+                        "strategy_order_error",
+                        {"operation": action.operation, "error": str(exc)},
+                    )
+                )
 
-    def _event(self, bot: BotThreadConfig, event: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def _event(
+        self, bot: BotThreadConfig, event: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
         return {
             "ts": utc_now_ts(),
             "task_id": bot.task_id,
@@ -521,7 +725,9 @@ class TradingWorkerService:
             "price": f"{ws_base}{self._market_ws_path(bot.market, 'price')}",
             "wall": f"{ws_base}{self._market_ws_path(bot.market, 'wall')}",
         }
-        external_price_url = str(bot.metadata.get("external_price_ws") or self.config.WS_EXTERNAL_PRICE_URL).strip()
+        external_price_url = str(
+            bot.metadata.get("external_price_ws") or self.config.WS_EXTERNAL_PRICE_URL
+        ).strip()
         if external_price_url:
             default_urls["external-price"] = external_price_url
 
@@ -550,30 +756,62 @@ class TradingWorkerService:
         replaced_parts = [market_key if part == "xag" else part for part in parts]
         return "/".join(replaced_parts)
 
-    def _build_ws_headers(self, domain: str, session: requests.Session, cookies: dict[str, str]) -> dict[str, str]:
+    def _build_ws_headers(
+        self, domain: str, session: requests.Session, cookies: dict[str, str]
+    ) -> dict[str, str]:
         normalized = normalize_base_url(domain)
         parsed = urlparse(normalized)
         origin = f"{parsed.scheme}://{parsed.netloc}"
-        return {"User-Agent": session.headers.get("User-Agent", "Mozilla/5.0"), "Cookie": cookie_header(cookies), "Origin": origin, "Pragma": "no-cache", "Cache-Control": "no-cache", "Accept-Language": session.headers.get("Accept-Language", "en-US,en;q=0.9")}
+        return {
+            "User-Agent": session.headers.get("User-Agent", "Mozilla/5.0"),
+            "Cookie": cookie_header(cookies),
+            "Origin": origin,
+            "Pragma": "no-cache",
+            "Cache-Control": "no-cache",
+            "Accept-Language": session.headers.get("Accept-Language", "en-US,en;q=0.9"),
+        }
 
-    async def _bars_loop(self, user: UserContext, bot: BotThreadConfig, session: requests.Session, state: RuntimeState, stop_event: asyncio.Event) -> None:
+    async def _bars_loop(
+        self,
+        user: UserContext,
+        bot: BotThreadConfig,
+        session: requests.Session,
+        state: RuntimeState,
+        stop_event: asyncio.Event,
+    ) -> None:
         while not stop_event.is_set():
             end_ts = utc_now_ts()
             try:
-                bars = await asyncio.to_thread(self.market_client.fetch_bars, session, user.domain, bot.market, self.config.BARS_RESOLUTION, end_ts - self.config.LOOKBACK_SECONDS, end_ts)
+                bars = await asyncio.to_thread(
+                    self.market_client.fetch_bars,
+                    session,
+                    user.domain,
+                    bot.market,
+                    self.config.BARS_RESOLUTION,
+                    end_ts - self.config.LOOKBACK_SECONDS,
+                    end_ts,
+                )
                 for bar in bars:
                     state.bars_by_ts[int(bar["ts"])] = bar
                 self._prune_bars(state)
                 state.last_error = None
             except BadRequestError as exc:
                 state.last_error = exc.message
-                await self._publish_event(self._event(bot, "bars_error", {"error": exc.message}))
+                await self._publish_event(
+                    self._event(bot, "bars_error", {"error": exc.message})
+                )
             except Exception as exc:
                 state.last_error = str(exc)
             await asyncio.sleep(self.config.BARS_POLL_INTERVAL_SECONDS)
 
-    async def _on_ws_disconnect(self, bot: BotThreadConfig, stream_name: str, reason: str) -> None:
-        await self._publish_event(self._event(bot, "ws_disconnected", {"stream": stream_name, "reason": reason}))
+    async def _on_ws_disconnect(
+        self, bot: BotThreadConfig, stream_name: str, reason: str
+    ) -> None:
+        await self._publish_event(
+            self._event(
+                bot, "ws_disconnected", {"stream": stream_name, "reason": reason}
+            )
+        )
 
     async def _on_open_live(self, ws: Any) -> Optional[asyncio.Task]:
         await ws.send(json.dumps(LIVE_SUB_MESSAGE, ensure_ascii=False))
@@ -587,7 +825,9 @@ class TradingWorkerService:
 
         return asyncio.create_task(ping_loop())
 
-    async def _on_live_bars_message(self, bot: BotThreadConfig, raw: str, state: RuntimeState) -> None:
+    async def _on_live_bars_message(
+        self, bot: BotThreadConfig, raw: str, state: RuntimeState
+    ) -> None:
         try:
             payload = json.loads(raw)
             bar = self._extract_bar(payload)
@@ -598,28 +838,49 @@ class TradingWorkerService:
         except Exception:
             return
 
-    async def _on_price_message(self, bot: BotThreadConfig, user: UserContext, raw: str, state: RuntimeState, session: requests.Session) -> None:
+    async def _on_price_message(
+        self,
+        bot: BotThreadConfig,
+        user: UserContext,
+        raw: str,
+        state: RuntimeState,
+        session: requests.Session,
+    ) -> None:
         price = self._extract_price(raw)
         if price is None:
             return
         state.latest_price = price
-        await self._publish_event(self._event(bot, "price", {"price": price, "symbol": bot.market}))
+        await self._publish_event(
+            self._event(bot, "price", {"price": price, "symbol": bot.market})
+        )
         if bot.run_mode == "simulator":
             try:
-                await asyncio.to_thread(self.execution_client.price_tick, session=session, mobile=user.mobile, price=price, symbol=bot.market)
+                await asyncio.to_thread(
+                    self.execution_client.price_tick,
+                    session=session,
+                    mobile=user.mobile,
+                    price=price,
+                    symbol=bot.market,
+                )
             except Exception as exc:
-                await self._publish_event(self._event(bot, "simulator_price_error", {"error": str(exc)}))
+                await self._publish_event(
+                    self._event(bot, "simulator_price_error", {"error": str(exc)})
+                )
 
         await self._apply_strategy(bot, user, session, state)
 
-    async def _on_external_price_message(self, bot: BotThreadConfig, raw: str, state: RuntimeState) -> None:
+    async def _on_external_price_message(
+        self, bot: BotThreadConfig, raw: str, state: RuntimeState
+    ) -> None:
         price = self._extract_price(raw)
         if price is None:
             return
         state.external_price = price
         await self._publish_event(self._event(bot, "external-price", {"price": price}))
 
-    async def _on_wall_message(self, bot: BotThreadConfig, raw: str, state: RuntimeState) -> None:
+    async def _on_wall_message(
+        self, bot: BotThreadConfig, raw: str, state: RuntimeState
+    ) -> None:
         try:
             payload = json.loads(raw)
         except Exception:
@@ -630,10 +891,24 @@ class TradingWorkerService:
 
     def _extract_bar(self, payload: dict[str, Any]) -> Optional[dict[str, float]]:
         if all(k in payload for k in ["ts", "open", "high", "low", "close"]):
-            return {"ts": int(payload["ts"]), "open": float(payload["open"]), "high": float(payload["high"]), "low": float(payload["low"]), "close": float(payload["close"])}
+            return {
+                "ts": int(payload["ts"]),
+                "open": float(payload["open"]),
+                "high": float(payload["high"]),
+                "low": float(payload["low"]),
+                "close": float(payload["close"]),
+            }
         data = payload.get("data")
-        if isinstance(data, dict) and all(k in data for k in ["ts", "open", "high", "low", "close"]):
-            return {"ts": int(data["ts"]), "open": float(data["open"]), "high": float(data["high"]), "low": float(data["low"]), "close": float(data["close"])}
+        if isinstance(data, dict) and all(
+            k in data for k in ["ts", "open", "high", "low", "close"]
+        ):
+            return {
+                "ts": int(data["ts"]),
+                "open": float(data["open"]),
+                "high": float(data["high"]),
+                "low": float(data["low"]),
+                "close": float(data["close"]),
+            }
         return None
 
     def _extract_price(self, raw: str) -> Optional[float]:

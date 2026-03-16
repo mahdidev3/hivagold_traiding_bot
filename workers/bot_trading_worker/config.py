@@ -11,7 +11,9 @@ class Config:
     TRADING_WORKER_HOST: str = os.getenv("TRADING_WORKER_HOST", "0.0.0.0")
     TRADING_WORKER_PORT: int = int(os.getenv("TRADING_WORKER_PORT", "8006"))
 
-    USERS_JSON_PATH: str = os.getenv("TRADING_USERS_JSON_PATH", "workers/bot_trading_worker/users.json")
+    USERS_JSON_PATH: str = os.getenv(
+        "TRADING_USERS_JSON_PATH", "workers/bot_trading_worker/users.json"
+    )
     USERS_STORAGE_DIR: str = os.getenv("USERS_STORAGE_DIR", "../bot_auth_worker/Users")
 
     ROOM_PREFIX: str = os.getenv("TRADING_ROOM_PREFIX", "/xag")
@@ -27,8 +29,13 @@ class Config:
     BARS_SYMBOL: str = os.getenv("BARS_SYMBOL", "xag")
     AUTO_START: bool = os.getenv("TRADING_AUTO_START", "true").lower() == "true"
 
-    SIMULATOR_WORKER_URL: str = os.getenv("SIMULATOR_WORKER_URL", "http://localhost:8007")
-    SIMULATOR_API_KEY: str = os.getenv("SIMULATOR_API_KEY", os.getenv("BOT_API_KEY", "change-me"))
+    SIMULATOR_WORKER_URL: str = os.getenv(
+        "SIMULATOR_WORKER_URL", "http://localhost:8007"
+    )
+    SIMULATOR_API_KEY: str = os.getenv(
+        "SIMULATOR_API_KEY", os.getenv("BOT_API_KEY", "change-me")
+    )
+    DEFAULT_UNITS: str = os.getenv("TRADING_DEFAULT_UNITS", 1)
 
 
 config = Config()

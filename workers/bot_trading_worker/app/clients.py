@@ -83,7 +83,11 @@ def normalize_mobile(mobile: str) -> str:
 
 
 def normalize_domain_key(domain: str) -> str:
-    parsed = urlparse((domain or "").strip() if "://" in (domain or "") else f"//{(domain or '').strip()}")
+    parsed = urlparse(
+        (domain or "").strip()
+        if "://" in (domain or "")
+        else f"//{(domain or '').strip()}"
+    )
     hostname = (parsed.hostname or "").strip().lower()
     if not hostname:
         host_port = parsed.netloc or parsed.path
@@ -147,11 +151,18 @@ class MarketDataClient:
         self.config = config
         self.logger = logging.getLogger(__name__)
 
-    def build_http_session(self, cookies: Dict[str, str], domain: str, headers: Optional[Dict[str, str]] = None) -> requests.Session:
+    def build_http_session(
+        self,
+        cookies: Dict[str, str],
+        domain: str,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> requests.Session:
         base_site = normalize_base_url(domain)
         parsed = urlparse(base_site)
         host = parsed.hostname or normalize_domain_key(domain)
-        room_prefix = f"/{self.config.ROOM_PREFIX.strip('/')}" if self.config.ROOM_PREFIX else ""
+        room_prefix = (
+            f"/{self.config.ROOM_PREFIX.strip('/')}" if self.config.ROOM_PREFIX else ""
+        )
         referer = f"{base_site}{room_prefix}/"
         session = requests.Session()
         prepared_headers: Dict[str, str] = {
@@ -182,36 +193,83 @@ class MarketDataClient:
 
     def warmup(self, session: requests.Session, domain: str) -> None:
         base_site = normalize_base_url(domain)
-        room_prefix = f"/{self.config.ROOM_PREFIX.strip('/')}" if self.config.ROOM_PREFIX else ""
+        room_prefix = (
+            f"/{self.config.ROOM_PREFIX.strip('/')}" if self.config.ROOM_PREFIX else ""
+        )
         referer = f"{base_site}{room_prefix}/"
         response = session.get(referer, timeout=20, allow_redirects=True)
         if response.status_code == 400:
             raise BadRequestError(response.text)
         response.raise_for_status()
 
-    def fetch_bars(self, session: requests.Session, domain: str, symbol: str, resolution: str, start_ts: int, end_ts: int) -> list[dict[str, Any]]:
+    def fetch_bars(
+        self,
+        session: requests.Session,
+        domain: str,
+        symbol: str,
+        resolution: str,
+        start_ts: int,
+        end_ts: int,
+    ) -> list[dict[str, Any]]:
         base_site = normalize_base_url(domain)
         url = f"{base_site}{self.config.BARS_API_PATH}"
-        response = session.get(url, params={"symbol": symbol, "from": start_ts, "to": end_ts, "resolution": resolution}, timeout=30)
+        response = session.get(
+            url,
+            params={
+                "symbol": symbol,
+                "from": start_ts,
+                "to": end_ts,
+                "resolution": resolution,
+            },
+            timeout=30,
+        )
         if response.status_code == 400:
             raise BadRequestError(response.text)
         response.raise_for_status()
         data = response.json()
         if isinstance(data, dict) and all(k in data for k in ["t", "o", "h", "l", "c"]):
-            return [{"ts": int(data["t"][idx]), "open": float(data["o"][idx]), "high": float(data["h"][idx]), "low": float(data["l"][idx]), "close": float(data["c"][idx])} for idx in range(len(data["t"]))]
+            return [
+                {
+                    "ts": int(data["t"][idx]),
+                    "open": float(data["o"][idx]),
+                    "high": float(data["h"][idx]),
+                    "low": float(data["l"][idx]),
+                    "close": float(data["c"][idx]),
+                }
+                for idx in range(len(data["t"]))
+            ]
         if isinstance(data, list):
             bars: list[dict[str, Any]] = []
             for item in data:
                 ts = item.get("ts", item.get("time"))
                 if ts is None:
                     continue
-                bars.append({"ts": int(ts), "open": float(item["open"]), "high": float(item["high"]), "low": float(item["low"]), "close": float(item["close"])})
+                bars.append(
+                    {
+                        "ts": int(ts),
+                        "open": float(item["open"]),
+                        "high": float(item["high"]),
+                        "low": float(item["low"]),
+                        "close": float(item["close"]),
+                    }
+                )
             return bars
         raise ValueError("Unexpected bars API response shape")
 
-    async def ws_connect(self, name: str, url: str, headers: Dict[str, str], stop_event: asyncio.Event, on_message: Callable[[str], Awaitable[None]], on_open: Optional[Callable[[Any], Awaitable[Optional[asyncio.Task]]]] = None, on_disconnect: Optional[Callable[[str], Awaitable[None]]] = None) -> None:
+    async def ws_connect(
+        self,
+        name: str,
+        url: str,
+        headers: Dict[str, str],
+        stop_event: asyncio.Event,
+        on_message: Callable[[str], Awaitable[None]],
+        on_open: Optional[Callable[[Any], Awaitable[Optional[asyncio.Task]]]] = None,
+        on_disconnect: Optional[Callable[[str], Awaitable[None]]] = None,
+    ) -> None:
         parsed_url = urlparse(url)
-        ssl_context = ssl.create_default_context() if parsed_url.scheme == "wss" else None
+        ssl_context = (
+            ssl.create_default_context() if parsed_url.scheme == "wss" else None
+        )
         while not stop_event.is_set():
             background_task: Optional[asyncio.Task] = None
             try:
@@ -255,15 +313,34 @@ class TradingExecutionClient:
         self.config = config
         self._sim_task_ids: dict[str, str] = {}
 
-    def price_tick(self, *, session: requests.Session, mobile: str, price: float, symbol: str) -> dict[str, Any]:
+    def price_tick(
+        self, *, session: requests.Session, mobile: str, price: float, symbol: str
+    ) -> dict[str, Any]:
         domain = session.headers.get("Origin") or session.headers.get("origin") or ""
-        task_id = self._ensure_sim_task(session=session, domain=domain, payload={"mobile": mobile, "symbol": symbol})
+        task_id = self._ensure_sim_task(
+            session=session, domain=domain, payload={"mobile": mobile, "symbol": symbol}
+        )
         url = f"{self.config.SIMULATOR_WORKER_URL}/simulator/price"
-        return self._request("POST", url, session, {"task_id": task_id, "market": symbol, "price": price}, include_api_key=True)
+        return self._request(
+            "POST",
+            url,
+            session,
+            {"task_id": task_id, "market": symbol, "price": price},
+            include_api_key=True,
+        )
 
-    def create_order(self, *, run_mode: str, session: requests.Session, domain: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def create_order(
+        self,
+        *,
+        run_mode: str,
+        session: requests.Session,
+        domain: str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         if run_mode == "simulator":
-            task_id = self._ensure_sim_task(session=session, domain=domain, payload=payload)
+            task_id = self._ensure_sim_task(
+                session=session, domain=domain, payload=payload
+            )
             url = f"{self.config.SIMULATOR_WORKER_URL}/simulator/tasks/{task_id}/positions"
             sim_payload = {
                 "strategy": payload.get("strategy", "manual"),
@@ -274,42 +351,82 @@ class TradingExecutionClient:
                 "stop_loss": payload.get("stop_loss"),
                 "units": payload.get("units", 1.0),
             }
-            return self._request("POST", url, session, sim_payload, include_api_key=True)
-        return self._request("POST", self._create_order_url(run_mode, domain), session, payload)
 
+            return self._request(
+                "POST", url, session, sim_payload, include_api_key=True
+            )
+        return self._request(
+            "POST", self._create_order_url(run_mode, domain), session, payload
+        )
 
-    def update_order(self, *, run_mode: str, session: requests.Session, domain: str, order_id: int | str, payload: dict[str, Any]) -> dict[str, Any]:
+    def update_order(
+        self,
+        *,
+        run_mode: str,
+        session: requests.Session,
+        domain: str,
+        order_id: int | str,
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
         if run_mode == "simulator":
             url = f"{self.config.SIMULATOR_WORKER_URL}/simulator/positions/{order_id}"
             return self._request("PATCH", url, session, payload, include_api_key=True)
-        update_url = f"{normalize_base_url(domain)}{self.config.ROOM_PREFIX}/api/order/update/"
+        update_url = (
+            f"{normalize_base_url(domain)}{self.config.ROOM_PREFIX}/api/order/update/"
+        )
         body = dict(payload)
         body["order_id"] = order_id
         return self._request("POST", update_url, session, body)
 
-    def close_order(self, *, run_mode: str, session: requests.Session, domain: str, order_id: int | str, close_price: float | None = None, reason: str | None = None) -> dict[str, Any]:
+    def close_order(
+        self,
+        *,
+        run_mode: str,
+        session: requests.Session,
+        domain: str,
+        order_id: int | str,
+        close_price: float | None = None,
+        reason: str | None = None,
+    ) -> dict[str, Any]:
         if run_mode == "simulator":
             url = f"{self.config.SIMULATOR_WORKER_URL}/simulator/positions/{order_id}/close"
             body = {"close_price": close_price, "reason": reason or "strategy-close"}
             return self._request("POST", url, session, body, include_api_key=True)
-        close_url = f"{normalize_base_url(domain)}{self.config.ROOM_PREFIX}/api/order/close/"
+        close_url = (
+            f"{normalize_base_url(domain)}{self.config.ROOM_PREFIX}/api/order/close/"
+        )
         return self._request("POST", close_url, session, {"order_id": order_id})
 
     def _create_order_url(self, run_mode: str, domain: str) -> str:
         if run_mode == "simulator":
             return f"{self.config.SIMULATOR_WORKER_URL}/simulator/tasks"
-        room_prefix = f"/{self.config.ROOM_PREFIX.strip('/')}" if self.config.ROOM_PREFIX else ""
+        room_prefix = (
+            f"/{self.config.ROOM_PREFIX.strip('/')}" if self.config.ROOM_PREFIX else ""
+        )
         return f"{normalize_base_url(domain)}{room_prefix}/api/order/create/"
 
-    def _ensure_sim_task(self, *, session: requests.Session, domain: str, payload: dict[str, Any]) -> str:
+    def _ensure_sim_task(
+        self, *, session: requests.Session, domain: str, payload: dict[str, Any]
+    ) -> str:
         simulator_task_id = str(payload.get("simulator_task_id") or "").strip()
         if simulator_task_id:
             return simulator_task_id
-        mobile = str(payload.get("mobile") or payload.get("user_id") or payload_mobile(session)).strip()
+        mobile = str(
+            payload.get("mobile") or payload.get("user_id") or payload_mobile(session)
+        ).strip()
         if not mobile:
             raise ValueError("mobile is required for simulator mode")
         portfolio_id = str(payload.get("portfolio_id") or f"portfolio-{mobile}")
-        market = str(payload.get("symbol") or payload.get("market") or payload.get("room") or "xag").strip().lower()
+        market = (
+            str(
+                payload.get("symbol")
+                or payload.get("market")
+                or payload.get("room")
+                or "xag"
+            )
+            .strip()
+            .lower()
+        )
         key = f"{portfolio_id}:{mobile}:{market}:{normalize_domain(domain)}"
         cached = self._sim_task_ids.get(key)
         if cached:
@@ -324,22 +441,40 @@ class TradingExecutionClient:
                 "user_id": mobile,
                 "market": market,
                 "domain": domain,
-                "initial_units": float(payload.get("initial_units") or self.config.DEFAULT_UNITS * 100),
+                "initial_units": float(
+                    payload.get("initial_units") or self.config.DEFAULT_UNITS * 100
+                ),
             },
             include_api_key=True,
         )
-        created = result.get("result") if isinstance(result.get("result"), dict) else result
+        created = (
+            result.get("result") if isinstance(result.get("result"), dict) else result
+        )
         task_id = str(created.get("id"))
         if not task_id:
             raise ValueError("simulator task id not returned")
         self._sim_task_ids[key] = task_id
         return task_id
 
-    def _request(self, method: str, url: str, session: requests.Session, payload: dict[str, Any], include_api_key: bool = False) -> dict[str, Any]:
+    def _request(
+        self,
+        method: str,
+        url: str,
+        session: requests.Session,
+        payload: dict[str, Any],
+        include_api_key: bool = False,
+    ) -> dict[str, Any]:
         headers = dict(session.headers)
         if include_api_key:
             headers["x-api-key"] = self.config.SIMULATOR_API_KEY
-        response = requests.request(method, url, json=payload, cookies=session.cookies.get_dict(), headers=headers, timeout=20)
+        response = requests.request(
+            method,
+            url,
+            json=payload,
+            cookies=session.cookies.get_dict(),
+            headers=headers,
+            timeout=20,
+        )
         response.raise_for_status()
         data = response.json()
         if isinstance(data, dict):
@@ -351,12 +486,20 @@ def payload_mobile(session: requests.Session) -> str:
     return str(session.headers.get("X-Mobile", "")).strip()
 
 
-def build_clients(config: Config) -> tuple[SessionStore, MarketDataClient, TradingExecutionClient]:
-    return SessionStore(config.USERS_STORAGE_DIR), MarketDataClient(config), TradingExecutionClient(config)
+def build_clients(
+    config: Config,
+) -> tuple[SessionStore, MarketDataClient, TradingExecutionClient]:
+    return (
+        SessionStore(config.USERS_STORAGE_DIR),
+        MarketDataClient(config),
+        TradingExecutionClient(config),
+    )
 
 
 def cookie_header(cookies: Dict[str, str]) -> str:
-    return "; ".join(f"{key}={value}" for key, value in cookies.items() if key and value is not None)
+    return "; ".join(
+        f"{key}={value}" for key, value in cookies.items() if key and value is not None
+    )
 
 
 def utc_now_ts() -> int:

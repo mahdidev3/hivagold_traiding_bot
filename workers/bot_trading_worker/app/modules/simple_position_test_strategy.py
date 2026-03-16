@@ -15,7 +15,9 @@ class SimplePositionTestStrategyModule:
     def __init__(self, config: Config):
         self.config = config
 
-    def on_market_update(self, snapshot: MarketSnapshot, context: StrategyContext) -> list[StrategyAction]:
+    def on_market_update(
+        self, snapshot: MarketSnapshot, context: StrategyContext
+    ) -> list[StrategyAction]:
         open_orders = context.open_orders or []
         if open_orders:
             return []
@@ -42,7 +44,9 @@ class SimplePositionTestStrategyModule:
             )
         ]
 
-    def evaluate(self, snapshot: MarketSnapshot, base_payload: dict[str, Any]) -> dict[str, Any]:
+    def evaluate(
+        self, snapshot: MarketSnapshot, base_payload: dict[str, Any]
+    ) -> dict[str, Any]:
         result = dict(base_payload)
         result["strategy"] = self.name
         result["recommendation"] = "buy_market_once_if_no_open_position"
