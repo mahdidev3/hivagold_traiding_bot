@@ -36,7 +36,6 @@ class WsMetadataStrategy(StrategyBase):
                 f"streams={', '.join(name for name, _ in self.STREAM_KEYS)}"
             ),
         )
-
         timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=None)
         connector = aiohttp.TCPConnector(ssl=False)
 
@@ -217,7 +216,8 @@ class WsMetadataStrategy(StrategyBase):
         headers: dict[str, str],
     ) -> None:
         self.log("INFO", f"Connecting to {stream_name} websocket: {ws_url}")
-
+        if "Origin" not in headers:
+            headers["Origin"] = "https://hivagold.com"
         try:
             async with session.ws_connect(ws_url, headers=headers, heartbeat=30) as ws:
                 self.log("INFO", f"Connected to {stream_name} websocket")
