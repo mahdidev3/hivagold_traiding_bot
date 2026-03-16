@@ -55,6 +55,13 @@ function Invoke-Doctor {
             Write-Host "[WARN] missing manage script for $worker" -ForegroundColor Yellow
         }
 
+        $envFile = Join-Path $RepoRoot "workers/$worker/.env"
+        if (Test-Path $envFile) {
+            Write-Host "[OK] env file exists: workers/$worker/.env" -ForegroundColor Green
+        } else {
+            Write-Host "[WARN] missing env file for $worker at workers/$worker/.env" -ForegroundColor Yellow
+        }
+
         try {
             $null = Invoke-RestMethod -Uri "http://localhost:$port/health" -Method Get -TimeoutSec 5
             Write-Host "[OK] $worker health endpoint is reachable on :$port" -ForegroundColor Green

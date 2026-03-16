@@ -6,7 +6,7 @@ services:
     image: bot-trading-worker:latest
     container_name: trading-worker
     env_file:
-      - ../.env
+      - ./.env
     ports:
       - "${TRADING_WORKER_PORT:-8006}:8006"
     environment:

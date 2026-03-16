@@ -6,13 +6,13 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$WorkerRoot = Split-Path -Parent $PSScriptRoot
+$WorkerRoot = (Resolve-Path (Split-Path -Parent $PSScriptRoot)).Path
 $ComposeFile = Join-Path $WorkerRoot "docker/docker-compose.yaml"
 $EnvFile = Join-Path $WorkerRoot ".env"
 
 function Invoke-Compose {
     param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Args)
-    docker compose -f $ComposeFile --project-directory $WorkerRoot @Args
+    docker compose --env-file $EnvFile -f $ComposeFile --project-directory $WorkerRoot @Args
 }
 
 function Build { Write-Host "[*] Building Docker image..." -ForegroundColor Cyan; Invoke-Compose build; Write-Host "[OK] Build complete." -ForegroundColor Green }
