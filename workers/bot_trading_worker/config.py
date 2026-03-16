@@ -10,7 +10,6 @@ class Config:
     TRADING_WORKER_PORT: int = int(os.getenv("TRADING_WORKER_PORT", "8005"))
     USERS_STORAGE_DIR: str = os.getenv("USERS_STORAGE_DIR", "../bot_auth_worker/Users")
     WS_EXTERNAL_PRICE_URL: str = os.getenv("WS_EXTERNAL_PRICE_URL", "")
-    BOT_API_KEY: str = os.getenv("BOT_API_KEY", "change-me")
 
 
 def get_config() -> Config:
