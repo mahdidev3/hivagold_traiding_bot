@@ -253,21 +253,34 @@ class MarketDataClient:
 class TradingExecutionClient:
     def __init__(self, config: Config):
         self.config = config
+        self._sim_task_ids: dict[str, str] = {}
 
     def price_tick(self, *, session: requests.Session, mobile: str, price: float, symbol: str) -> dict[str, Any]:
-        url = f"{self.config.SIMULATOR_WORKER_URL}/portfolio/price"
-        return self._request("POST", url, session, {"mobile": mobile, "price": price, "symbol": symbol}, include_api_key=True)
+        domain = session.headers.get("Origin") or session.headers.get("origin") or ""
+        task_id = self._ensure_sim_task(session=session, domain=domain, payload={"mobile": mobile, "symbol": symbol})
+        url = f"{self.config.SIMULATOR_WORKER_URL}/simulator/price"
+        return self._request("POST", url, session, {"task_id": task_id, "market": symbol, "price": price}, include_api_key=True)
 
     def create_order(self, *, run_mode: str, session: requests.Session, domain: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if run_mode == "simulator":
+            task_id = self._ensure_sim_task(session=session, domain=domain, payload=payload)
+            url = f"{self.config.SIMULATOR_WORKER_URL}/simulator/tasks/{task_id}/positions"
+            sim_payload = {
+                "strategy": payload.get("strategy", "manual"),
+                "side": payload.get("action"),
+                "entry_type": payload.get("order_type", "market"),
+                "entry_price": payload.get("price"),
+                "take_profit": payload.get("take_profit"),
+                "stop_loss": payload.get("stop_loss"),
+                "units": payload.get("units", 1.0),
+            }
+            return self._request("POST", url, session, sim_payload, include_api_key=True)
         return self._request("POST", self._create_order_url(run_mode, domain), session, payload)
 
 
     def update_order(self, *, run_mode: str, session: requests.Session, domain: str, order_id: int | str, payload: dict[str, Any]) -> dict[str, Any]:
         if run_mode == "simulator":
-            mobile = payload_mobile(session)
-            if not mobile:
-                raise ValueError("mobile header is required for simulator update")
-            url = f"{self.config.SIMULATOR_WORKER_URL}/portfolio/users/{mobile}/positions/{order_id}"
+            url = f"{self.config.SIMULATOR_WORKER_URL}/simulator/positions/{order_id}"
             return self._request("PATCH", url, session, payload, include_api_key=True)
         update_url = f"{normalize_base_url(domain)}{self.config.ROOM_PREFIX}/api/order/update/"
         body = dict(payload)
@@ -276,10 +289,7 @@ class TradingExecutionClient:
 
     def close_order(self, *, run_mode: str, session: requests.Session, domain: str, order_id: int | str, close_price: float | None = None, reason: str | None = None) -> dict[str, Any]:
         if run_mode == "simulator":
-            mobile = payload_mobile(session)
-            if not mobile:
-                raise ValueError("mobile header is required for simulator close")
-            url = f"{self.config.SIMULATOR_WORKER_URL}/portfolio/users/{mobile}/positions/{order_id}/close"
+            url = f"{self.config.SIMULATOR_WORKER_URL}/simulator/positions/{order_id}/close"
             body = {"close_price": close_price, "reason": reason or "strategy-close"}
             return self._request("POST", url, session, body, include_api_key=True)
         close_url = f"{normalize_base_url(domain)}{self.config.ROOM_PREFIX}/api/order/close/"
@@ -287,9 +297,40 @@ class TradingExecutionClient:
 
     def _create_order_url(self, run_mode: str, domain: str) -> str:
         if run_mode == "simulator":
-            return f"{self.config.SIMULATOR_WORKER_URL}/portfolio/orders"
+            return f"{self.config.SIMULATOR_WORKER_URL}/simulator/tasks"
         room_prefix = f"/{self.config.ROOM_PREFIX.strip('/')}" if self.config.ROOM_PREFIX else ""
         return f"{normalize_base_url(domain)}{room_prefix}/api/order/create/"
+
+    def _ensure_sim_task(self, *, session: requests.Session, domain: str, payload: dict[str, Any]) -> str:
+        mobile = str(payload.get("mobile") or payload.get("user_id") or payload_mobile(session)).strip()
+        if not mobile:
+            raise ValueError("mobile is required for simulator mode")
+        portfolio_id = str(payload.get("portfolio_id") or f"portfolio-{mobile}")
+        market = str(payload.get("symbol") or payload.get("room") or "xag").strip().lower()
+        key = f"{portfolio_id}:{mobile}:{market}:{normalize_domain(domain)}"
+        cached = self._sim_task_ids.get(key)
+        if cached:
+            return cached
+        task_url = f"{self.config.SIMULATOR_WORKER_URL}/simulator/tasks"
+        result = self._request(
+            "POST",
+            task_url,
+            session,
+            {
+                "portfolio_id": portfolio_id,
+                "user_id": mobile,
+                "market": market,
+                "domain": domain,
+                "initial_units": float(payload.get("initial_units") or self.config.DEFAULT_UNITS * 100),
+            },
+            include_api_key=True,
+        )
+        created = result.get("result") if isinstance(result.get("result"), dict) else result
+        task_id = str(created.get("id"))
+        if not task_id:
+            raise ValueError("simulator task id not returned")
+        self._sim_task_ids[key] = task_id
+        return task_id
 
     def _request(self, method: str, url: str, session: requests.Session, payload: dict[str, Any], include_api_key: bool = False) -> dict[str, Any]:
         headers = dict(session.headers)

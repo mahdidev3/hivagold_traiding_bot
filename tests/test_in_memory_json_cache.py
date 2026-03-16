@@ -8,11 +8,7 @@ from workers.bot_trading_worker.app.clients import SessionStore
 
 class SimulatorConfig:
     USERS_STORAGE_DIR = ""
-    SIMULATOR_HISTORY_FILE = "history.json"
-    SIMULATOR_HISTORY_FLUSH_INTERVAL_SECONDS = 60
-    PRICE_WS_SYMBOL = "xag"
-    WS_PRICE_PATH = "/ws/price"
-    PRICE_WS_SUBSCRIBE_MESSAGE = '{"action":"sub"}'
+    WS_PRICE_PATH_TEMPLATE = "/{market}/ws/{market}/price/"
 
 
 def test_trading_session_store_uses_memory_cache(tmp_path, monkeypatch):
@@ -35,24 +31,16 @@ def test_trading_session_store_uses_memory_cache(tmp_path, monkeypatch):
     assert second and second["cookies"]["sessionid"] == "abc"
 
 
-def test_simulator_history_write_is_throttled(tmp_path):
+def test_simulator_writes_records_to_json(tmp_path):
     cfg = SimulatorConfig()
     cfg.USERS_STORAGE_DIR = str(tmp_path)
     service = SimulatorWorkerService(cfg, logger=__import__("logging").getLogger("test"))
 
-    writes = 0
-    original_write = service._write_json
-
-    def counted_write(path: Path, data):
-        nonlocal writes
-        writes += 1
-        return original_write(path, data)
-
-    service._write_json = counted_write
-
     async def run_case():
-        await service.process_price_tick("09120000000", 2500.0)
-        await service.process_price_tick("09120000000", 2501.0)
+        task = await service.create_task({"portfolio_id": "p1", "user_id": "u1", "market": "xag", "initial_units": 2})
+        await service.process_price_tick(task["id"], "xag", 2500.0)
 
     asyncio.run(run_case())
-    assert writes == 1
+
+    task_files = list((Path(cfg.USERS_STORAGE_DIR) / "simulator" / "tasks").glob("*.json"))
+    assert len(task_files) == 1

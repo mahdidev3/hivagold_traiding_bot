@@ -14,24 +14,37 @@ class WorkerBaseResponse(BaseModel):
     error: Optional[str] = None
 
 
-class PositionCreateRequest(BaseModel):
-    mobile: str
+class SimulationTaskCreateRequest(BaseModel):
+    portfolio_id: str
+    user_id: str
+    market: Literal["mazaneh", "ounce", "mazaneh_xag", "xag"]
     domain: Optional[str] = None
+    initial_units: float = Field(gt=0)
+
+
+class SimulationTaskCloseRequest(BaseModel):
+    reason: str = "manual"
+
+
+class PositionCreateRequest(BaseModel):
     strategy: str = "manual"
-    symbol: str = "xag"
     side: Literal["buy", "sell"]
     entry_type: Literal["market", "limit"] = "market"
     entry_price: Optional[float] = None
     take_profit: float
     stop_loss: float
-    volume: float = 1.0
+    units: float = Field(default=1.0, gt=0)
 
 
 class PositionUpdateRequest(BaseModel):
     take_profit: Optional[float] = None
     stop_loss: Optional[float] = None
     entry_price: Optional[float] = None
-    volume: Optional[float] = None
+    units: Optional[float] = Field(default=None, gt=0)
+
+
+class PositionStopLossUpdateRequest(BaseModel):
+    stop_loss: float
 
 
 class PositionCloseRequest(BaseModel):
@@ -40,8 +53,9 @@ class PositionCloseRequest(BaseModel):
 
 
 class PriceTickRequest(BaseModel):
+    task_id: str
+    market: Literal["mazaneh", "ounce", "mazaneh_xag", "xag"]
     price: float
-    symbol: Optional[str] = None
 
 
 class GenericResultResponse(WorkerBaseResponse):
