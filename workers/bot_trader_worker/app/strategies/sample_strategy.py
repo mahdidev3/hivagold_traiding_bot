@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 
-from strategies.strategy_base import StrategyBase
+from .strategy_base import StrategyBase
 
 """ 
 TODO : thread check and make them thread

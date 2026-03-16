@@ -4,7 +4,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, Field
 
 
-BotStatus = Literal["created", "running", "stopped", "removed"]
+BotStatus = Literal["created", "running", "stopped", "removed", "error"]
 
 
 class HealthResponse(BaseModel):
@@ -22,6 +22,7 @@ class TraderBotCreateRequest(BaseModel):
     bot_name: str = Field(min_length=1, max_length=128)
     strategy_name: str = Field(min_length=1, max_length=128)
     market: str = Field(min_length=1, max_length=64)
+    portfolio_id: str = Field(min_length=1, max_length=128)
     mode: Literal["market", "simulator"] = "simulator"
     description: str | None = Field(default=None, max_length=500)
     metadata: dict[str, Any] = Field(default_factory=dict)

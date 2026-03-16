@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from strategies.strategy_base import StrategyBase
-from strategies.sample_strategy import SampleStrategy
+from .strategy_base import StrategyBase
+from .sample_strategy import SampleStrategy
+from .ws_metadata_strategy import WsMetadataStrategy
 
 
 STRATEGY_REGISTRY: dict[str, type[StrategyBase]] = {
     "sample_strategy": SampleStrategy,
+    "ws_metadata_strategy": WsMetadataStrategy,
 }
 
 
