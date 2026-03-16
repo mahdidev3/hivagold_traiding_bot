@@ -30,6 +30,11 @@ async def _run_bot_crud_flow():
     created = await service.process(
         {
             "action": "create_bot",
+            "user_id": "u-1",
+            "portfolio_id": "p-1",
+            "market": "xag",
+            "strategy": "ema_wall_v1",
+            "simulator_task_id": "sim-1",
             "mobile": "09120000000",
             "password": "secret",
             "domain": "https://hivagold.com",
@@ -62,19 +67,25 @@ async def _run_multi_bot_same_market_different_strategy_flow():
     first = await service.process(
         {
             "action": "create_bot",
+            "user_id": "u-1",
+            "portfolio_id": "p-1",
+            "market": "xag",
+            "strategy": "ema_wall_v1",
             "mobile": "09120000000",
             "password": "secret",
             "domain": "https://hivagold.com",
-            "strategy": "ema_wall_v1",
         }
     )
     second = await service.process(
         {
             "action": "create_bot",
+            "user_id": "u-1",
+            "portfolio_id": "p-1",
+            "market": "xag",
+            "strategy": "ema_wall_v1",
             "mobile": "09120000000",
             "password": "secret",
             "domain": "https://hivagold.com",
-            "strategy": "pending",
         }
     )
 
@@ -85,8 +96,7 @@ async def _run_multi_bot_same_market_different_strategy_flow():
     ambiguous = await service.process(
         {
             "action": "start_bot",
-            "mobile": "09120000000",
-            "domain": "https://hivagold.com",
+            "task_id": first["result"]["task_id"],
         }
     )
     assert ambiguous["success"] is False
@@ -99,6 +109,10 @@ async def _run_multi_bot_same_market_different_strategy_flow():
     status = await service.process({"action": "status"})
     assert status["success"] is True
     assert len(status["result"]["active_bots"]) == 2
+
+    task_status = await service.process({"action": "get_task_status", "task_id": first["result"]["task_id"]})
+    assert task_status["success"] is True
+    assert task_status["result"]["bot_count"] == 2
 
 
 def test_create_start_stop_remove_bot_flow():

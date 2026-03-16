@@ -69,4 +69,8 @@ class ApiServerService:
             return self.trading_client.post("/trading/process", {"action": "start_bot", **payload})
         if action == "stop_bot":
             return self.trading_client.post("/trading/process", {"action": "stop_bot", **payload})
+        if action == "get_task_status":
+            return self.trading_client.post("/trading/process", {"action": "get_task_status", **payload})
+        if action == "get_task_logs":
+            return self.trading_client.post("/trading/process", {"action": "get_task_logs", **payload})
         return {"success": False, "error": f"Unsupported action: {action}"}

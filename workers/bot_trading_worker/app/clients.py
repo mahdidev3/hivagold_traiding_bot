@@ -302,11 +302,14 @@ class TradingExecutionClient:
         return f"{normalize_base_url(domain)}{room_prefix}/api/order/create/"
 
     def _ensure_sim_task(self, *, session: requests.Session, domain: str, payload: dict[str, Any]) -> str:
+        simulator_task_id = str(payload.get("simulator_task_id") or "").strip()
+        if simulator_task_id:
+            return simulator_task_id
         mobile = str(payload.get("mobile") or payload.get("user_id") or payload_mobile(session)).strip()
         if not mobile:
             raise ValueError("mobile is required for simulator mode")
         portfolio_id = str(payload.get("portfolio_id") or f"portfolio-{mobile}")
-        market = str(payload.get("symbol") or payload.get("room") or "xag").strip().lower()
+        market = str(payload.get("symbol") or payload.get("market") or payload.get("room") or "xag").strip().lower()
         key = f"{portfolio_id}:{mobile}:{market}:{normalize_domain(domain)}"
         cached = self._sim_task_ids.get(key)
         if cached:

@@ -1,131 +1,60 @@
 # API Server Worker
 
-## What this worker does
+Public gateway for auth and trading task bot operations.
 
-`api_server` is the public gateway for the bot platform. It exposes a simplified HTTP API and forwards requests to internal workers:
+Base URL: `http://localhost:8000`
 
-- `bot_auth_worker` for login/logout.
-- `bot_trading_worker` for bot lifecycle operations.
+## Endpoints
+- `GET /health`
+- `POST /login`
+- `POST /logout`
+- `POST /bots/create`
+- `POST /bots/remove`
+- `POST /bots/start`
+- `POST /bots/stop`
+- `POST /tasks/status`
+- `POST /tasks/logs`
 
-## How this worker is used
-
-Use this service as the single entrypoint from UI/scripts/automation. Instead of calling internal workers directly, call `api_server` endpoints.
-
-Default local base URL:
-
-- `http://localhost:8000`
-
-## APIs
-
-### `GET /health`
-Health probe.
-
-### `POST /login`
-Authenticate a mobile account via auth worker.
-
-Request body:
-```json
-{
-  "mobile": "09123456789",
-  "password": "your-password",
-  "max_retries": 3,
-  "base_domain": "https://hivagold.com"
-}
-```
-
-### `POST /logout`
-Logout an account via auth worker.
-
-Request body:
-```json
-{
-  "mobile": "09123456789",
-  "base_domain": "https://hivagold.com"
-}
-```
-
-### `POST /bots/create`
-Create/register a bot in trading worker.
-
-Request body:
-```json
-{
-  "mobile": "09123456789",
-  "password": "your-password",
-  "domain": "https://hivagold.com",
-  "strategy": "ema_wall_v1",
-  "room": "xag",
-  "run_mode": "simulator",
-  "active": false,
-  "metadata": {
-    "portfolio_id": "optional"
-  }
-}
-```
-
-### `POST /bots/remove`
-Remove bot by `bot_id` or by unique identity (`mobile` + `domain` and optional strategy/room/run_mode).
-
-Request body (by id):
-```json
-{
-  "bot_id": "bot-123abc456def"
-}
-```
-
-### `POST /bots/start`
-Activate/start an existing bot.
-
-Request body:
-```json
-{
-  "bot_id": "bot-123abc456def"
-}
-```
-
-### `POST /bots/stop`
-Deactivate/stop an existing bot.
-
-Request body:
-```json
-{
-  "bot_id": "bot-123abc456def"
-}
-```
-
-## Full API examples (curl)
+## Full test example (curl)
 
 ```bash
-# health
-curl http://localhost:8000/health
-
-# login
+# login first (to save cookies/headers in auth storage)
 curl -X POST http://localhost:8000/login \
   -H 'Content-Type: application/json' \
-  -d '{"mobile":"09123456789","password":"pass","max_retries":3,"base_domain":"https://hivagold.com"}'
-
-# logout
-curl -X POST http://localhost:8000/logout \
-  -H 'Content-Type: application/json' \
-  -d '{"mobile":"09123456789","base_domain":"https://hivagold.com"}'
+  -d '{"mobile":"09123456789","password":"pass","base_domain":"https://hivagold.com"}'
 
 # create bot
 curl -X POST http://localhost:8000/bots/create \
   -H 'Content-Type: application/json' \
-  -d '{"mobile":"09123456789","password":"pass","domain":"https://hivagold.com","strategy":"ema_wall_v1","room":"xag","run_mode":"simulator","active":false,"metadata":{}}'
+  -d '{
+    "user_id":"user-1",
+    "portfolio_id":"portfolio-1",
+    "market":"xag",
+    "strategy":"simple_position_test_v1",
+    "simulator_task_id":"sim-task-123",
+    "mobile":"09123456789",
+    "password":"pass",
+    "domain":"https://hivagold.com",
+    "run_mode":"simulator",
+    "active":false,
+    "metadata":{
+      "external_source":"manual-test",
+      "ws_streams":["price","wall"]
+    }
+  }'
 
-# start bot
+# start bot by id
 curl -X POST http://localhost:8000/bots/start \
   -H 'Content-Type: application/json' \
-  -d '{"bot_id":"bot-123abc456def"}'
+  -d '{"bot_id":"bot-xxxxxxxxxxxx"}'
 
-# stop bot
-curl -X POST http://localhost:8000/bots/stop \
+# get task status
+curl -X POST http://localhost:8000/tasks/status \
   -H 'Content-Type: application/json' \
-  -d '{"bot_id":"bot-123abc456def"}'
+  -d '{"task_id":"task-xxxxxxxxxxxxxxxx"}'
 
-# remove bot
-curl -X POST http://localhost:8000/bots/remove \
+# get task logs
+curl -X POST http://localhost:8000/tasks/logs \
   -H 'Content-Type: application/json' \
-  -d '{"bot_id":"bot-123abc456def"}'
+  -d '{"task_id":"task-xxxxxxxxxxxxxxxx"}'
 ```

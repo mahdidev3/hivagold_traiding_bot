@@ -91,3 +91,19 @@ async def stop_bot(payload: BotRefRequest):
         service.execute, "stop_bot", payload.model_dump(exclude_none=True)
     )
     return ApiActionResponse(success=result.get("success", False), data=result)
+
+
+@app.post("/tasks/status", response_model=ApiActionResponse)
+async def get_task_status(payload: BotRefRequest):
+    result = await asyncio.to_thread(
+        service.execute, "get_task_status", payload.model_dump(exclude_none=True)
+    )
+    return ApiActionResponse(success=result.get("success", False), data=result)
+
+
+@app.post("/tasks/logs", response_model=ApiActionResponse)
+async def get_task_logs(payload: BotRefRequest):
+    result = await asyncio.to_thread(
+        service.execute, "get_task_logs", payload.model_dump(exclude_none=True)
+    )
+    return ApiActionResponse(success=result.get("success", False), data=result)

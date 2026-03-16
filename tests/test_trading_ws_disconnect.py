@@ -34,7 +34,7 @@ async def _run_test():
         published.append(event)
 
     service._publish_event = fake_publish
-    bot = BotThreadConfig(mobile="0912", password="x", domain="https://hivagold.com")
+    bot = BotThreadConfig(user_id="u", portfolio_id="p", market="xag", mobile="0912", password="x", domain="https://hivagold.com", task_id="task-1")
     await service._on_ws_disconnect(bot, "price", "closed: 1006")
     assert published
     assert published[0]["event"] == "ws_disconnected"

@@ -27,16 +27,20 @@ async def _run_activation_id_flow_test():
 
     service._run_bot = idle_run_bot
     bot = BotThreadConfig(
+        user_id="u-1",
+        portfolio_id="p-1",
+        market="xag",
         mobile="09120000000",
         password="secret",
         domain="https://hivagold.com",
         strategy="ema_wall_v1",
+        task_id="task-fixed",
         active=False,
     )
     bot_id = service._new_bot_id()
     service._bot_configs[bot_id] = bot
 
-    activated = await service.process({"action": "activate_bot", "mobile": bot.mobile, "domain": bot.domain})
+    activated = await service.process({"action": "activate_bot", "task_id": bot.task_id})
     assert activated["success"] is True
     activated_bot_id = activated["result"]["bot_id"]
     assert activated_bot_id == bot_id
