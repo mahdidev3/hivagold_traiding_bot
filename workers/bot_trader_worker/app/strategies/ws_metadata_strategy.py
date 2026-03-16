@@ -20,7 +20,10 @@ class WsMetadataStrategy(StrategyBase):
         ("wall", "wall_ws_url"),
     )
 
-    async def run(self) -> None:
+    def run(self) -> None:
+        asyncio.run(self._run_async())
+
+    async def _run_async(self) -> None:
         metadata = self._validate_metadata(self.config.metadata)
         auth_payload = self._load_auth_payload(metadata["phone_number"])
         headers = self._build_ws_headers(auth_payload)
@@ -38,7 +41,8 @@ class WsMetadataStrategy(StrategyBase):
         connector = aiohttp.TCPConnector(ssl=False)
 
         async with aiohttp.ClientSession(
-            timeout=timeout, connector=connector
+            timeout=timeout,
+            connector=connector,
         ) as session:
             tasks = [
                 asyncio.create_task(
@@ -54,7 +58,7 @@ class WsMetadataStrategy(StrategyBase):
             ]
 
             stop_waiter = asyncio.create_task(
-                self._stop_event.wait(),
+                self._wait_for_thread_stop(),
                 name=f"{self.config.bot_id}-stop-waiter",
             )
 
@@ -80,6 +84,10 @@ class WsMetadataStrategy(StrategyBase):
             await asyncio.gather(*done, return_exceptions=True)
 
         self.log("INFO", "WsMetadataStrategy finished")
+
+    async def _wait_for_thread_stop(self) -> None:
+        while not self._stop_event.is_set():
+            await asyncio.sleep(0.2)
 
     def _validate_metadata(self, metadata: dict[str, Any]) -> dict[str, str]:
         normalized: dict[str, str] = {}
@@ -160,9 +168,7 @@ class WsMetadataStrategy(StrategyBase):
         if not sessions:
             raise ValueError(f"'sessions' not found in {user_info_path}")
 
-        # Get first domain dynamically
         domain, session_data = next(iter(sessions.items()))
-
         self.log("INFO", f"Loaded auth session for domain: {domain}")
 
         if not session_data:
