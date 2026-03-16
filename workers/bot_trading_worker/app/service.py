@@ -142,6 +142,14 @@ class TradingWorkerService:
 
     async def process(self, args: Dict[str, Any]) -> Dict[str, Any]:
         action = args.get("action")
+        if action == "create_bot":
+            return await self._create_bot(args)
+        if action == "remove_bot":
+            return await self._remove_bot(args)
+        if action == "start_bot":
+            return await self._toggle_bot(args, activate=True)
+        if action == "stop_bot":
+            return await self._toggle_bot(args, activate=False)
         if action == "start":
             return {"success": True, "result": await self.start()}
         if action == "stop":
@@ -155,6 +163,47 @@ class TradingWorkerService:
         if action == "deactivate_bot":
             return await self._toggle_bot(args, activate=False)
         return {"success": False, "error": f"Unknown action: {action}"}
+
+    async def _create_bot(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        mobile = normalize_mobile(str(args.get("mobile", "")).strip())
+        password = str(args.get("password", "")).strip()
+        domain = str(args.get("domain", "")).strip()
+        if not mobile or not password or not domain:
+            return {"success": False, "error": "mobile, password and domain are required"}
+
+        bot = BotThreadConfig(
+            mobile=mobile,
+            password=password,
+            domain=domain,
+            strategy=str(args.get("strategy", "pending")).strip() or "pending",
+            room=str(args.get("room", "xag")).strip() or "xag",
+            run_mode=str(args.get("run_mode", "simulator")).strip() or "simulator",
+            active=bool(args.get("active", False)),
+            metadata=args.get("metadata") if isinstance(args.get("metadata"), dict) else {},
+        )
+        key = self._user_key(bot.mobile, bot.domain)
+        self._bot_configs[key] = bot
+        bot_id = self._active_bot_ids.get(key)
+        if bot.active:
+            bot_id = self._ensure_bot_active(key, bot)
+        return {"success": True, "result": self._bot_to_dict(bot) | {"bot_id": bot_id}}
+
+    async def _remove_bot(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        key = self._resolve_bot_key(args)
+        if not key:
+            return {"success": False, "error": "Bot not found"}
+        bot = self._bot_configs.pop(key, None)
+        if not bot:
+            return {"success": False, "error": "Bot not found"}
+        task = self._user_tasks.pop(key, None)
+        if task:
+            task.cancel()
+        bot_id = self._active_bot_ids.get(key)
+        self._drop_bot_id(key)
+        return {
+            "success": True,
+            "result": {"removed": True, "bot_id": bot_id, "mobile": bot.mobile, "domain": bot.domain},
+        }
 
     async def _toggle_bot(self, args: Dict[str, Any], activate: bool) -> Dict[str, Any]:
         key = self._resolve_bot_key(args)

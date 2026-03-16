@@ -9,18 +9,20 @@ def _print_response(response: requests.Response):
     print(json.dumps(response.json(), ensure_ascii=False, indent=2))
 
 
-def add_common_room_args(parser: argparse.ArgumentParser):
-    parser.add_argument("--mobile", required=True)
-    parser.add_argument("--base-domain", default="https://hivagold.com")
-    parser.add_argument("--market", default="xag", choices=["xag", "mazaneh", "ounce"])
+def _bot_ref_payload(args: argparse.Namespace) -> dict:
+    payload = {}
+    if args.bot_id:
+        payload["bot_id"] = args.bot_id
+    if args.mobile:
+        payload["mobile"] = args.mobile
+    if args.domain:
+        payload["domain"] = args.domain
+    return payload
 
 
 def main():
     parser = argparse.ArgumentParser(description="Hivagold API Server CLI")
-    parser.add_argument(
-        "--server", default="http://localhost:8000", help="API server base URL"
-    )
-
+    parser.add_argument("--server", default="http://localhost:8000", help="API server base URL")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     login_parser = subparsers.add_parser("login")
@@ -32,37 +34,20 @@ def main():
     logout_parser.add_argument("--mobile", required=True)
     logout_parser.add_argument("--base-domain")
 
-    room_status_parser = subparsers.add_parser("room-status")
-    room_status_parser.add_argument("--mobile", required=True)
-    room_status_parser.add_argument("--base-domain", default="https://hivagold.com")
-    room_status_parser.add_argument(
-        "--market", default="xag", choices=["xag", "mazaneh", "ounce"]
-    )
+    create_bot = subparsers.add_parser("create-bot")
+    create_bot.add_argument("--mobile", required=True)
+    create_bot.add_argument("--password", required=True)
+    create_bot.add_argument("--domain", required=True)
+    create_bot.add_argument("--strategy", default="pending")
+    create_bot.add_argument("--room", default="xag")
+    create_bot.add_argument("--run-mode", default="simulator")
+    create_bot.add_argument("--active", action="store_true")
 
-    room_parser = subparsers.add_parser("room")
-    room_parser.add_argument(
-        "action",
-        choices=[
-            "portfolios",
-            "orders",
-            "order-create",
-            "order-close",
-            "transactions",
-            "transaction-close",
-            "portfolio-close",
-            "portfolio-create",
-        ],
-    )
-    add_common_room_args(room_parser)
-    room_parser.add_argument("--order-id")
-    room_parser.add_argument("--transaction-id")
-    room_parser.add_argument("--portfolio-id")
-    room_parser.add_argument("--order-type")
-    room_parser.add_argument("--action-side", choices=["buy", "sell"])
-    room_parser.add_argument("--units", type=float)
-    room_parser.add_argument("--price", type=float)
-    room_parser.add_argument("--stop-loss", type=float)
-    room_parser.add_argument("--take-profit", type=float)
+    for name in ("start-bot", "stop-bot", "remove-bot"):
+        p = subparsers.add_parser(name)
+        p.add_argument("--bot-id")
+        p.add_argument("--mobile")
+        p.add_argument("--domain")
 
     args = parser.parse_args()
 
@@ -70,51 +55,36 @@ def main():
         payload = {"mobile": args.mobile, "password": args.password}
         if args.base_domain:
             payload["base_domain"] = args.base_domain
-        response = requests.post(f"{args.server}/login", json=payload, timeout=30)
-        _print_response(response)
+        _print_response(requests.post(f"{args.server}/login", json=payload, timeout=30))
         return
 
     if args.command == "logout":
         payload = {"mobile": args.mobile}
         if args.base_domain:
             payload["base_domain"] = args.base_domain
-        response = requests.post(f"{args.server}/logout", json=payload, timeout=30)
-        _print_response(response)
+        _print_response(requests.post(f"{args.server}/logout", json=payload, timeout=30))
         return
 
-    if args.command == "room-status":
+    if args.command == "create-bot":
         payload = {
             "mobile": args.mobile,
-            "base_domain": args.base_domain,
-            "market": args.market,
+            "password": args.password,
+            "domain": args.domain,
+            "strategy": args.strategy,
+            "room": args.room,
+            "run_mode": args.run_mode,
+            "active": args.active,
         }
-        response = requests.post(f"{args.server}/room/status", json=payload, timeout=30)
-        _print_response(response)
+        _print_response(requests.post(f"{args.server}/bots/create", json=payload, timeout=30))
         return
 
-    if args.command == "room":
-        payload = {
-            "mobile": args.mobile,
-            "base_domain": args.base_domain,
-            "market": args.market,
-            "payload": {},
-        }
-        optional_fields = {
-            "order_id": args.order_id,
-            "transaction_id": args.transaction_id,
-            "portfolio_id": args.portfolio_id,
-            "order_type": args.order_type,
-            "action": args.action_side,
-            "units": args.units,
-            "price": args.price,
-            "stop_loss": args.stop_loss,
-            "take_profit": args.take_profit,
-        }
-        payload["payload"] = {k: v for k, v in optional_fields.items() if v is not None}
-        response = requests.post(
-            f"{args.server}/room/{args.action}", json=payload, timeout=30
-        )
-        _print_response(response)
+    endpoint = {
+        "start-bot": "/bots/start",
+        "stop-bot": "/bots/stop",
+        "remove-bot": "/bots/remove",
+    }.get(args.command)
+    if endpoint:
+        _print_response(requests.post(f"{args.server}{endpoint}", json=_bot_ref_payload(args), timeout=30))
         return
 
     raise SystemExit("Unsupported command")

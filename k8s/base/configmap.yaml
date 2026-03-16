@@ -9,7 +9,6 @@ data:
 
   # Service discovery (internal cluster DNS)
   AUTH_WORKER_URL: http://bot-auth-worker:8002
-  ROOM_WORKER_URL: http://bot-room-worker:8005
   TRADING_WORKER_URL: http://bot-trading-worker:8006
   CAPTCHA_SOLVE_URL: http://bot-captcha-worker:8001/solve
 
