@@ -532,6 +532,24 @@ class TradingWorkerService:
                 urls[stream_name] = stream_url
         return urls
 
+    def _market_ws_path(self, market: str, stream: str) -> str:
+        market_key = (market or "xag").strip().lower() or "xag"
+        templates = {
+            "live-bars": self.config.WS_LIVE_BARS_PATH,
+            "price": self.config.WS_PRICE_PATH,
+            "wall": self.config.WS_WALL_PATH,
+        }
+        raw_template = templates.get(stream)
+        if not raw_template:
+            raise ValueError(f"Unsupported stream: {stream}")
+
+        if "{market}" in raw_template:
+            return raw_template.format(market=market_key)
+
+        parts = raw_template.split("/")
+        replaced_parts = [market_key if part == "xag" else part for part in parts]
+        return "/".join(replaced_parts)
+
     def _build_ws_headers(self, domain: str, session: requests.Session, cookies: dict[str, str]) -> dict[str, str]:
         normalized = normalize_base_url(domain)
         parsed = urlparse(normalized)
