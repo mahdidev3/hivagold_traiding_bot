@@ -29,7 +29,7 @@ def test_api_server_service_routes_auth_and_bot_actions():
 
     create_result = service.execute(
         "create_bot",
-        {"mobile": "0912", "password": "p", "domain": "https://hivagold.com"},
+        {"user_id": "u-1", "portfolio_id": "p-1", "market": "xag", "mobile": "0912", "password": "p", "domain": "https://hivagold.com"},
     )
     assert create_result["path"] == "/trading/process"
     assert trading.calls[-1][2]["action"] == "create_bot"
@@ -42,3 +42,6 @@ def test_api_server_service_routes_auth_and_bot_actions():
 
     service.execute("remove_bot", {"bot_id": "b1"})
     assert trading.calls[-1][2]["action"] == "remove_bot"
+
+    service.execute("get_task_status", {"task_id": "task-1"})
+    assert trading.calls[-1][2]["action"] == "get_task_status"
