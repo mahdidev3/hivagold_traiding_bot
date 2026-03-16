@@ -1,4 +1,7 @@
+import asyncio
+
 from workers.bot_trading_worker.app.service import BotThreadConfig, TradingWorkerService
+from workers.bot_trading_worker.app.strategies.registry import get_strategy_runner
 
 
 class DummySessionStore:
@@ -51,3 +54,27 @@ def test_simple_test_strategy_is_registered():
     strategy = service._resolve_strategy(bot)
     assert strategy is not None
     assert strategy.name == "simple_position_test_v1"
+
+
+def test_strategy_registry_resolves_test_strategy_runner():
+    runner = get_strategy_runner("simple_position_test_v1")
+    assert runner.name == "simple_position_test_v1"
+
+
+def test_create_bot_stores_run_mode_simulator_default():
+    service = TradingWorkerService(DummyConfig(), DummySessionStore(), DummyMarket(), DummyExec())
+    result = asyncio.run(
+        service.process(
+            {
+                "action": "create_bot",
+                "user_id": "u-1",
+                "portfolio_id": "p-1",
+                "market": "xag",
+                "mobile": "0912",
+                "password": "x",
+                "domain": "https://hivagold.com",
+            }
+        )
+    )
+    bot_id = result["result"]["bot_id"]
+    assert service._bot_configs[bot_id].run_mode == "simulator"

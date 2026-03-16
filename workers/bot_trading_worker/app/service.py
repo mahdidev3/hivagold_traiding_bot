@@ -1,6 +1,5 @@
 import asyncio
 import hashlib
-import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -9,6 +8,8 @@ from urllib.parse import urlparse
 from uuid import uuid4
 
 import requests
+
+from .strategies.registry import get_strategy_runner
 
 
 @dataclass
@@ -26,6 +27,7 @@ class BotThreadConfig:
     password: str
     domain: str
     strategy: str = "simple_position_test_v1"
+    run_mode: str = "simulator"
     task_id: Optional[str] = None
     simulator_task_id: Optional[str] = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -165,6 +167,13 @@ class TradingWorkerService:
         }
         simulator_url = bot.metadata.get("simulator_url", "http://localhost:8007")
         url = f"{simulator_url.rstrip('/')}/simulator/tasks/{task_id}/positions"
+        self.logger.info("Creating position with method=POST url=%s", url)
+        await self._append_log(
+            bot.task_id or "",
+            "info",
+            "position request prepared",
+            {"method": "POST", "url": url, "run_mode": bot.run_mode},
+        )
         body = {"task_id": task_id, **payload}
         result = await asyncio.to_thread(
             requests.post,
@@ -177,9 +186,13 @@ class TradingWorkerService:
         return result.json()
 
     async def _run_bot(self, bot: BotThreadConfig):
-        strategy = self._resolve_strategy(bot)
+        strategy_spec = self._resolve_strategy(bot)
+        strategy_runner = get_strategy_runner(strategy_spec.name)
         await self._append_log(
-            bot.task_id or "", "info", "bot started", {"strategy": strategy.name}
+            bot.task_id or "",
+            "info",
+            "bot started",
+            {"strategy": strategy_spec.name, "run_mode": bot.run_mode},
         )
         await self._append_log(
             bot.task_id or "", "info", "ws configured", self._ws_urls(bot.domain, bot)
@@ -199,19 +212,15 @@ class TradingWorkerService:
                 {"has_cookies": bool(session.get("cookies"))},
             )
 
-        if strategy.name == "simple_position_test_v1":
-            try:
-                created = await self._create_position_for_test_strategy(bot)
-                await self._append_log(
-                    bot.task_id or "", "info", "position created", {"response": created}
-                )
-            except Exception as exc:
-                await self._append_log(
-                    bot.task_id or "",
-                    "error",
-                    "failed to create position",
-                    {"error": str(exc)},
-                )
+        try:
+            await strategy_runner.run(service=self, bot=bot)
+        except Exception as exc:
+            await self._append_log(
+                bot.task_id or "",
+                "error",
+                "strategy run failed",
+                {"error": str(exc), "strategy": strategy_spec.name},
+            )
 
         while True:
             await asyncio.sleep(2)
@@ -303,6 +312,7 @@ class TradingWorkerService:
             portfolio_id=str(payload.get("portfolio_id", "")).strip(),
             market=str(payload.get("market", "xag")).strip().lower(),
             strategy=str(payload.get("strategy", "simple_position_test_v1")).strip(),
+            run_mode=str(payload.get("run_mode", "simulator")).strip().lower(),
             simulator_task_id=payload.get("simulator_task_id"),
             mobile=str(payload.get("mobile", "")).strip(),
             password=str(payload.get("password", "")).strip(),

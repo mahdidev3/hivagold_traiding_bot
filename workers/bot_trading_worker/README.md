@@ -97,7 +97,7 @@ or with task id when only one bot exists for that task:
 
 1. Loads per-task session (cookies/headers) using mobile + domain.
 2. Builds WS url map based on market + requested streams.
-3. Calls simulator `POST /simulator/position/create` with the provided simulator task id.
+3. Runs modular analysis (price + candles) and if valid, calls simulator `POST /simulator/tasks/{task_id}/positions`.
 4. Writes logs for start, ws config, and position create result.
 
 ## Full flow with simulator
