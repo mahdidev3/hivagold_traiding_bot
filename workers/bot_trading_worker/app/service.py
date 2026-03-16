@@ -12,7 +12,7 @@ import requests
 
 from config import Config
 from .clients import BadRequestError, MarketDataClient, SessionStore, TradingExecutionClient, UserContext, cookie_header, normalize_base_url, normalize_domain, normalize_mobile, utc_now_ts
-from .modules import EmaWallStrategyModule, MarketSnapshot, StrategyAction, StrategyContext
+from .modules import EmaWallStrategyModule, SimplePositionTestStrategyModule, MarketSnapshot, StrategyAction, StrategyContext
 
 LIVE_SUB_MESSAGE = {"action": "SubAdd", "subs": ["0~hivagold~xag~gold"]}
 PRICE_PING_MESSAGE = {"type": "ping"}
@@ -43,6 +43,13 @@ class BotThreadConfig:
     active: bool = True
     task_id: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def enabled_streams(self) -> set[str]:
+        streams = self.metadata.get("ws_streams")
+        if isinstance(streams, list):
+            return {str(item).strip() for item in streams if str(item).strip()}
+        return {"live-bars", "price", "wall"}
 
 
 class TradingWorkerService:
@@ -186,6 +193,8 @@ class TradingWorkerService:
         strategy = str(args.get("strategy", "pending")).strip() or "pending"
         if not user_id or not portfolio_id or not market or not strategy:
             return {"success": False, "error": "user_id, portfolio_id, market and strategy are required"}
+
+        task_id = self._build_task_id(portfolio_id, market, strategy, user_id)
 
         task_id = self._build_task_id(portfolio_id, market, strategy, user_id)
 
@@ -378,16 +387,32 @@ class TradingWorkerService:
         state = RuntimeState()
         session_stop_event = asyncio.Event()
         ws_headers = self._build_ws_headers(user.domain, http_session, cookies)
-        ws_urls = self._ws_urls(user.domain)
+        ws_urls = self._ws_urls(user.domain, bot)
 
         tasks = [
             asyncio.create_task(self._bars_loop(user, bot, http_session, state, session_stop_event)),
-            asyncio.create_task(self.market_client.ws_connect("live-bars", ws_urls["live-bars"], ws_headers, session_stop_event, on_message=lambda msg: self._on_live_bars_message(bot, msg, state), on_open=self._on_open_live, on_disconnect=lambda reason: self._on_ws_disconnect(bot, "live-bars", reason))),
-            asyncio.create_task(self.market_client.ws_connect("price", ws_urls["price"], ws_headers, session_stop_event, on_message=lambda msg: self._on_price_message(bot, user, msg, state, http_session), on_open=self._on_open_price, on_disconnect=lambda reason: self._on_ws_disconnect(bot, "price", reason))),
-            asyncio.create_task(self.market_client.ws_connect("wall", ws_urls["wall"], ws_headers, session_stop_event, on_message=lambda msg: self._on_wall_message(bot, msg, state), on_disconnect=lambda reason: self._on_ws_disconnect(bot, "wall", reason))),
         ]
-        if ws_urls.get("external-price"):
-            tasks.append(asyncio.create_task(self.market_client.ws_connect("external-price", ws_urls["external-price"], ws_headers, session_stop_event, on_message=lambda msg: self._on_external_price_message(bot, msg, state), on_disconnect=lambda reason: self._on_ws_disconnect(bot, "external-price", reason))))
+        stream_handlers = {
+            "live-bars": (lambda msg: self._on_live_bars_message(bot, msg, state), self._on_open_live),
+            "price": (lambda msg: self._on_price_message(bot, user, msg, state, http_session), self._on_open_price),
+            "wall": (lambda msg: self._on_wall_message(bot, msg, state), None),
+            "external-price": (lambda msg: self._on_external_price_message(bot, msg, state), None),
+        }
+        for stream_name, stream_url in ws_urls.items():
+            handler, on_open = stream_handlers[stream_name]
+            tasks.append(
+                asyncio.create_task(
+                    self.market_client.ws_connect(
+                        stream_name,
+                        stream_url,
+                        ws_headers,
+                        session_stop_event,
+                        on_message=handler,
+                        on_open=on_open,
+                        on_disconnect=lambda reason, stream=stream_name: self._on_ws_disconnect(bot, stream, reason),
+                    )
+                )
+            )
 
         try:
             while not self._stop_event.is_set() and bot.active:
@@ -416,7 +441,8 @@ class TradingWorkerService:
         strategy = self._resolve_strategy(bot)
         if strategy is None:
             return
-        if len(state.bars_by_ts) < 50 or state.latest_price is None:
+        min_bars = int(getattr(strategy, "min_bars", 50))
+        if len(state.bars_by_ts) < min_bars or state.latest_price is None:
             return
 
         bars = [state.bars_by_ts[k] for k in sorted(state.bars_by_ts.keys())[-200:]]
@@ -448,6 +474,8 @@ class TradingWorkerService:
                 if action.operation == "create_order":
                     payload = dict(action.payload)
                     payload.setdefault("user_id", user.mobile)
+                    if bot.simulator_task_id:
+                        payload.setdefault("simulator_task_id", bot.simulator_task_id)
                     result = await asyncio.to_thread(self.execution_client.create_order, run_mode=bot.run_mode, session=session, domain=user.domain, payload=payload)
                     state.open_orders.append(result.get("result") if isinstance(result.get("result"), dict) else payload)
                 elif action.operation == "update_order":
@@ -483,18 +511,25 @@ class TradingWorkerService:
             "payload": payload,
         }
 
-    def _ws_urls(self, domain: str) -> dict[str, str]:
+    def _ws_urls(self, domain: str, bot: BotThreadConfig) -> dict[str, str]:
         normalized = normalize_base_url(domain)
         parsed = urlparse(normalized)
         ws_scheme = "wss" if parsed.scheme == "https" else "ws"
         ws_base = f"{ws_scheme}://{parsed.netloc}"
-        urls = {
-            "live-bars": f"{ws_base}{self.config.WS_LIVE_BARS_PATH}",
-            "price": f"{ws_base}{self.config.WS_PRICE_PATH}",
-            "wall": f"{ws_base}{self.config.WS_WALL_PATH}",
+        default_urls = {
+            "live-bars": f"{ws_base}{self._market_ws_path(bot.market, 'live-bars')}",
+            "price": f"{ws_base}{self._market_ws_path(bot.market, 'price')}",
+            "wall": f"{ws_base}{self._market_ws_path(bot.market, 'wall')}",
         }
-        if self.config.WS_EXTERNAL_PRICE_URL.strip():
-            urls["external-price"] = self.config.WS_EXTERNAL_PRICE_URL.strip()
+        external_price_url = str(bot.metadata.get("external_price_ws") or self.config.WS_EXTERNAL_PRICE_URL).strip()
+        if external_price_url:
+            default_urls["external-price"] = external_price_url
+
+        enabled_streams = bot.enabled_streams
+        urls: dict[str, str] = {}
+        for stream_name, stream_url in default_urls.items():
+            if stream_name in enabled_streams:
+                urls[stream_name] = stream_url
         return urls
 
     def _build_ws_headers(self, domain: str, session: requests.Session, cookies: dict[str, str]) -> dict[str, str]:
@@ -507,7 +542,7 @@ class TradingWorkerService:
         while not stop_event.is_set():
             end_ts = utc_now_ts()
             try:
-                bars = await asyncio.to_thread(self.market_client.fetch_bars, session, user.domain, self.config.BARS_SYMBOL, self.config.BARS_RESOLUTION, end_ts - self.config.LOOKBACK_SECONDS, end_ts)
+                bars = await asyncio.to_thread(self.market_client.fetch_bars, session, user.domain, bot.market, self.config.BARS_RESOLUTION, end_ts - self.config.LOOKBACK_SECONDS, end_ts)
                 for bar in bars:
                     state.bars_by_ts[int(bar["ts"])] = bar
                 self._prune_bars(state)
@@ -550,10 +585,10 @@ class TradingWorkerService:
         if price is None:
             return
         state.latest_price = price
-        await self._publish_event(self._event(bot, "price", {"price": price, "symbol": self.config.BARS_SYMBOL}))
+        await self._publish_event(self._event(bot, "price", {"price": price, "symbol": bot.market}))
         if bot.run_mode == "simulator":
             try:
-                await asyncio.to_thread(self.execution_client.price_tick, session=session, mobile=user.mobile, price=price, symbol=self.config.BARS_SYMBOL)
+                await asyncio.to_thread(self.execution_client.price_tick, session=session, mobile=user.mobile, price=price, symbol=bot.market)
             except Exception as exc:
                 await self._publish_event(self._event(bot, "simulator_price_error", {"error": str(exc)}))
 

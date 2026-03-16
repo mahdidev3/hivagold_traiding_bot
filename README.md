@@ -16,13 +16,10 @@ Current execution target is simulator mode (`run_mode=simulator`) with flexible 
 
 ## API server endpoints
 
-Base URL: `http://localhost:8000`
-
-- `GET /health`
+## Quick API list (gateway)
 - `POST /login`
 - `POST /logout`
 - `POST /bots/create`
-- `POST /bots/remove`
 - `POST /bots/start`
 - `POST /bots/stop`
 - `POST /tasks/status`
