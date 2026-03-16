@@ -8,7 +8,7 @@ from typing import Any
 import aiohttp
 from aiohttp import WSMessage, WSMsgType
 
-from strategy_base import StrategyBase
+from .strategy_base import StrategyBase
 
 
 class WsMetadataStrategy(StrategyBase):
