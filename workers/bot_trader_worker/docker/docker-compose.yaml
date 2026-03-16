@@ -1,0 +1,9 @@
+services:
+  bot_trader_worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    env_file:
+      - ../env/.env.docker
+    ports:
+      - "8008:8008"

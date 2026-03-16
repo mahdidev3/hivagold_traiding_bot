@@ -1,0 +1,1 @@
+"""Bot trader worker package."""
