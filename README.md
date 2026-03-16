@@ -1,13 +1,20 @@
 # Hivagold Trading Bot
 
-This project is now intentionally minimal:
+This codebase now focuses on task-based trading bots.
 
-- **Auth endpoints**: login / logout
-- **Bot control endpoints**: create / remove / start / stop bot
+## Trading task model
 
-All room-related gateway endpoints were removed from `api_server`.
+A trading bot is created with:
+- `portfolio_id`
+- `market`
+- `strategy`
+- `user_id`
 
-## API Server Endpoints
+From these, worker generates a deterministic `task_id`. Multiple bots can run under the same `task_id`.
+
+Current execution target is simulator mode (`run_mode=simulator`) with flexible architecture for future real integration.
+
+## API server endpoints
 
 Base URL: `http://localhost:8000`
 
@@ -18,27 +25,5 @@ Base URL: `http://localhost:8000`
 - `POST /bots/remove`
 - `POST /bots/start`
 - `POST /bots/stop`
-
-### Examples
-
-```bash
-curl -X POST http://localhost:8000/login \
-  -H 'Content-Type: application/json' \
-  -d '{"mobile":"09123456789","password":"pass"}'
-
-curl -X POST http://localhost:8000/bots/create \
-  -H 'Content-Type: application/json' \
-  -d '{"mobile":"09123456789","password":"pass","domain":"https://hivagold.com"}'
-
-curl -X POST http://localhost:8000/bots/start \
-  -H 'Content-Type: application/json' \
-  -d '{"mobile":"09123456789","domain":"https://hivagold.com"}'
-
-curl -X POST http://localhost:8000/bots/stop \
-  -H 'Content-Type: application/json' \
-  -d '{"bot_id":"bot-123"}'
-
-curl -X POST http://localhost:8000/bots/remove \
-  -H 'Content-Type: application/json' \
-  -d '{"bot_id":"bot-123"}'
-```
+- `POST /tasks/status`
+- `POST /tasks/logs`

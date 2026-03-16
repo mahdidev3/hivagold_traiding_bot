@@ -1,4 +1,5 @@
 import asyncio
+import hashlib
 import json
 import logging
 from dataclasses import dataclass, field
@@ -30,13 +31,17 @@ class RuntimeState:
 
 @dataclass
 class BotThreadConfig:
-    mobile: str
-    password: str
-    domain: str
+    user_id: str
+    portfolio_id: str
+    market: str
     strategy: str = "pending"
-    room: str = "xag"
+    simulator_task_id: Optional[str] = None
+    mobile: str = ""
+    password: str = ""
+    domain: str = ""
     run_mode: str = "simulator"
     active: bool = True
+    task_id: str = ""
     metadata: dict[str, Any] = field(default_factory=dict)
 
 
@@ -53,6 +58,7 @@ class TradingWorkerService:
         self._user_tasks: dict[str, asyncio.Task] = {}
         self._bot_configs: dict[str, BotThreadConfig] = {}
         self._latest_events: dict[str, dict[str, Any]] = {}
+        self._task_logs: dict[str, list[dict[str, Any]]] = {}
         self._strategies: dict[str, Any] = {EmaWallStrategyModule.name: EmaWallStrategyModule(config)}
         self._bots_cache_mtime: float | None = None
         self._bots_cache: list[BotThreadConfig] = []
@@ -90,16 +96,22 @@ class TradingWorkerService:
             if not isinstance(item, dict):
                 continue
             bot = BotThreadConfig(
+                user_id=str(item.get("user_id", item.get("mobile", ""))).strip(),
+                portfolio_id=str(item.get("portfolio_id", item.get("metadata", {}).get("portfolio_id", ""))).strip(),
+                market=str(item.get("market", item.get("room", "xag"))).strip() or "xag",
+                strategy=str(item.get("strategy", "pending")).strip() or "pending",
+                simulator_task_id=str(item.get("simulator_task_id", "")).strip() or None,
                 mobile=normalize_mobile(str(item.get("mobile", "")).strip()),
                 password=str(item.get("password", "")).strip(),
                 domain=str(item.get("domain", "")).strip(),
-                strategy=str(item.get("strategy", "pending")).strip() or "pending",
-                room=str(item.get("room", "xag")).strip() or "xag",
                 run_mode=str(item.get("run_mode", "simulator")).strip() or "simulator",
                 active=bool(item.get("active", True)),
+                task_id=str(item.get("task_id", "")).strip(),
                 metadata=item.get("metadata") if isinstance(item.get("metadata"), dict) else {},
             )
-            if bot.mobile and bot.password and bot.domain:
+            if not bot.task_id:
+                bot.task_id = self._build_task_id(bot.portfolio_id, bot.market, bot.strategy, bot.user_id)
+            if bot.user_id and bot.portfolio_id and bot.market:
                 bots.append(bot)
         self._bots_cache_mtime = stat.st_mtime
         self._bots_cache = [BotThreadConfig(**bot.__dict__) for bot in bots]
@@ -161,23 +173,34 @@ class TradingWorkerService:
             return await self._toggle_bot(args, activate=True)
         if action == "deactivate_bot":
             return await self._toggle_bot(args, activate=False)
+        if action == "get_task_status":
+            return self._get_task_status(args)
+        if action == "get_task_logs":
+            return self._get_task_logs(args)
         return {"success": False, "error": f"Unknown action: {action}"}
 
     async def _create_bot(self, args: Dict[str, Any]) -> Dict[str, Any]:
-        mobile = normalize_mobile(str(args.get("mobile", "")).strip())
-        password = str(args.get("password", "")).strip()
-        domain = str(args.get("domain", "")).strip()
-        if not mobile or not password or not domain:
-            return {"success": False, "error": "mobile, password and domain are required"}
+        user_id = str(args.get("user_id", args.get("mobile", ""))).strip()
+        portfolio_id = str(args.get("portfolio_id", "")).strip()
+        market = str(args.get("market", args.get("room", ""))).strip()
+        strategy = str(args.get("strategy", "pending")).strip() or "pending"
+        if not user_id or not portfolio_id or not market or not strategy:
+            return {"success": False, "error": "user_id, portfolio_id, market and strategy are required"}
+
+        task_id = self._build_task_id(portfolio_id, market, strategy, user_id)
 
         bot = BotThreadConfig(
-            mobile=mobile,
-            password=password,
-            domain=domain,
-            strategy=str(args.get("strategy", "pending")).strip() or "pending",
-            room=str(args.get("room", "xag")).strip() or "xag",
+            user_id=user_id,
+            portfolio_id=portfolio_id,
+            market=market,
+            strategy=strategy,
+            simulator_task_id=str(args.get("simulator_task_id", "")).strip() or None,
+            mobile=normalize_mobile(str(args.get("mobile", "")).strip()),
+            password=str(args.get("password", "")).strip(),
+            domain=str(args.get("domain", "")).strip(),
             run_mode=str(args.get("run_mode", "simulator")).strip() or "simulator",
             active=bool(args.get("active", False)),
+            task_id=task_id,
             metadata=args.get("metadata") if isinstance(args.get("metadata"), dict) else {},
         )
         bot_id = self._new_bot_id()
@@ -200,6 +223,31 @@ class TradingWorkerService:
             "success": True,
             "result": {"removed": True, "bot_id": bot_id, "mobile": bot.mobile, "domain": bot.domain},
         }
+
+    def _build_task_id(self, portfolio_id: str, market: str, strategy: str, user_id: str) -> str:
+        task_key = f"{portfolio_id}|{market}|{strategy}|{user_id}".lower().strip()
+        digest = hashlib.sha1(task_key.encode("utf-8")).hexdigest()[:16]
+        return f"task-{digest}"
+
+    def _get_task_status(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        task_id = str(args.get("task_id", "")).strip()
+        if not task_id:
+            return {"success": False, "error": "task_id is required"}
+        bots = [
+            self._bot_to_dict(cfg) | {"bot_id": bot_id}
+            for bot_id, cfg in self._bot_configs.items()
+            if cfg.task_id == task_id
+        ]
+        if not bots:
+            return {"success": False, "error": "Task not found"}
+        active_bot_ids = [bot["bot_id"] for bot in bots if bot["bot_id"] in self._user_tasks]
+        return {"success": True, "result": {"task_id": task_id, "bot_count": len(bots), "active_bot_ids": active_bot_ids, "bots": bots}}
+
+    def _get_task_logs(self, args: Dict[str, Any]) -> Dict[str, Any]:
+        task_id = str(args.get("task_id", "")).strip()
+        if not task_id:
+            return {"success": False, "error": "task_id is required"}
+        return {"success": True, "result": {"task_id": task_id, "logs": self._task_logs.get(task_id, [])}}
 
     async def _toggle_bot(self, args: Dict[str, Any], activate: bool) -> Dict[str, Any]:
         bot_id = self._resolve_bot_id(args)
@@ -226,8 +274,12 @@ class TradingWorkerService:
         mobile = str(args.get("mobile", "")).strip()
         domain = str(args.get("domain", "")).strip()
         strategy = str(args.get("strategy", "")).strip()
-        room = str(args.get("room", "")).strip()
+        market = str(args.get("market", args.get("room", "")).strip())
         run_mode = str(args.get("run_mode", "")).strip()
+        task_id = str(args.get("task_id", "")).strip()
+        if task_id:
+            matches = [candidate_id for candidate_id, bot in self._bot_configs.items() if bot.task_id == task_id]
+            return matches[0] if len(matches) == 1 else None
         if not (mobile and domain):
             return None
         matches: list[str] = []
@@ -240,7 +292,7 @@ class TradingWorkerService:
                 continue
             if strategy and bot.strategy != strategy:
                 continue
-            if room and bot.room != room:
+            if market and bot.market != market:
                 continue
             if run_mode and bot.run_mode != run_mode:
                 continue
@@ -261,18 +313,38 @@ class TradingWorkerService:
         return {
             "bot_id": key,
             "mobile": bot.mobile,
+            "user_id": bot.user_id,
+            "portfolio_id": bot.portfolio_id,
+            "market": bot.market,
+            "task_id": bot.task_id,
+            "simulator_task_id": bot.simulator_task_id,
             "domain": bot.domain,
             "strategy": bot.strategy,
-            "room": bot.room,
             "run_mode": bot.run_mode,
         }
 
     def _bot_to_dict(self, bot: BotThreadConfig) -> dict[str, Any]:
-        return {"mobile": bot.mobile, "domain": bot.domain, "strategy": bot.strategy, "room": bot.room, "run_mode": bot.run_mode, "active": bot.active, "metadata": bot.metadata}
+        return {
+            "user_id": bot.user_id,
+            "portfolio_id": bot.portfolio_id,
+            "market": bot.market,
+            "strategy": bot.strategy,
+            "task_id": bot.task_id,
+            "simulator_task_id": bot.simulator_task_id,
+            "mobile": bot.mobile,
+            "domain": bot.domain,
+            "run_mode": bot.run_mode,
+            "active": bot.active,
+            "metadata": bot.metadata,
+        }
 
     async def _publish_event(self, payload: dict[str, Any]) -> None:
         key = f"{payload.get('domain')}:{payload.get('mobile')}:{payload.get('event')}"
         self._latest_events[key] = payload
+        task_id = payload.get("task_id")
+        if task_id:
+            self._task_logs.setdefault(task_id, []).append(payload)
+            self._task_logs[task_id] = self._task_logs[task_id][-500:]
 
     async def _run_bot(self, bot: BotThreadConfig) -> None:
         user = UserContext(mobile=bot.mobile, password=bot.password, domain=bot.domain)
@@ -358,9 +430,9 @@ class TradingWorkerService:
         context = StrategyContext(
             mobile=bot.mobile,
             domain=bot.domain,
-            room=bot.room,
+            room=bot.market,
             run_mode=bot.run_mode,
-            portfolio_id=str(bot.metadata.get("portfolio_id")) if bot.metadata.get("portfolio_id") is not None else None,
+            portfolio_id=bot.portfolio_id or None,
             open_orders=state.open_orders,
         )
         actions = strategy.on_market_update(snapshot, context)
@@ -397,7 +469,19 @@ class TradingWorkerService:
                 await self._publish_event(self._event(bot, "strategy_order_error", {"operation": action.operation, "error": str(exc)}))
 
     def _event(self, bot: BotThreadConfig, event: str, payload: dict[str, Any]) -> dict[str, Any]:
-        return {"ts": utc_now_ts(), "mobile": bot.mobile, "domain": normalize_domain(bot.domain), "strategy": bot.strategy, "run_mode": bot.run_mode, "event": event, "payload": payload}
+        return {
+            "ts": utc_now_ts(),
+            "task_id": bot.task_id,
+            "user_id": bot.user_id,
+            "portfolio_id": bot.portfolio_id,
+            "market": bot.market,
+            "mobile": bot.mobile,
+            "domain": normalize_domain(bot.domain) if bot.domain else "",
+            "strategy": bot.strategy,
+            "run_mode": bot.run_mode,
+            "event": event,
+            "payload": payload,
+        }
 
     def _ws_urls(self, domain: str) -> dict[str, str]:
         normalized = normalize_base_url(domain)

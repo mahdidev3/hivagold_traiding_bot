@@ -10,11 +10,14 @@ class HealthResponse(BaseModel):
 
 
 class TradingBotContext(BaseModel):
-    mobile: str
-    password: str
-    domain: str
+    user_id: str
+    portfolio_id: str
+    market: str
     strategy: str = "pending"
-    room: str = "xag"
+    simulator_task_id: Optional[str] = None
+    mobile: str = ""
+    password: str = ""
+    domain: str = ""
     run_mode: Literal["simulator", "real"] = "simulator"
     active: bool = True
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -32,13 +35,19 @@ class ProcessTradingRequest(BaseModel):
         "remove_bot",
         "start_bot",
         "stop_bot",
+        "get_task_status",
+        "get_task_logs",
     ]
+    task_id: Optional[str] = None
+    user_id: Optional[str] = None
+    portfolio_id: Optional[str] = None
+    market: Optional[str] = None
+    simulator_task_id: Optional[str] = None
     mobile: Optional[str] = None
     password: Optional[str] = None
     domain: Optional[str] = None
     bot_id: Optional[str] = None
     strategy: Optional[str] = "pending"
-    room: Optional[str] = "xag"
     run_mode: Optional[str] = "simulator"
     active: Optional[bool] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
@@ -55,6 +64,10 @@ class ProcessTradingResponse(WorkerBaseResponse):
 
 class BotEvent(BaseModel):
     ts: int
+    task_id: str
+    user_id: str
+    portfolio_id: str
+    market: str
     mobile: str
     domain: str
     strategy: str

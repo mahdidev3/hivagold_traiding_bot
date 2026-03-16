@@ -2,37 +2,33 @@
 
 ## What this worker does
 
-`bot_trading_worker` is the bot runtime engine.
+`bot_trading_worker` manages trading bots as **task-oriented bots**.
 
-It can:
+Each bot is bound to:
+- `portfolio_id`
+- `market`
+- `strategy`
+- `user_id`
 
-- Manage bot lifecycle (create/remove/start/stop/list/status).
-- Start async strategy loops for active bots.
-- Consume market data streams.
-- Send execution to:
-  - `bot_simulator_worker` in `run_mode=simulator`
-  - `bot_room_worker` in `run_mode=real`
+A deterministic `task_id` is generated from that tuple. Multiple bots can share the same task tuple (same `task_id`) to support parallel workers for one portfolio strategy.
 
-## How this worker is used
+For now, execution is simulator-first (`run_mode=simulator`). Real execution remains pluggable for future switch.
 
-- Usually called by `api_server` for bot management.
-- Can be called directly to control runtime actions.
-- On startup, optionally auto-starts runtime (`TRADING_AUTO_START`).
+## Core features
 
-Default local base URL:
+- Create/remove/start/stop bots.
+- Get overall runtime status.
+- Get status per task (`get_task_status`).
+- Keep and fetch per-task event logs (`get_task_logs`).
+- Strategy actions can:
+  - create positions/orders
+  - close positions/orders
+  - update orders (SL/TP and similar fields)
 
-- `http://localhost:8005`
-
-## APIs
-
-### `GET /health`
-Health probe.
+## API
 
 ### `POST /trading/process`
-Single action endpoint for trading worker commands.
-
-Supported `action` values:
-
+Supported `action`:
 - `start`
 - `stop`
 - `status`
@@ -41,69 +37,28 @@ Supported `action` values:
 - `remove_bot`
 - `start_bot`
 - `stop_bot`
-- `activate_bot` (alias of start)
-- `deactivate_bot` (alias of stop)
+- `activate_bot`
+- `deactivate_bot`
+- `get_task_status`
+- `get_task_logs`
 
-Request base schema:
+### Create bot request
 
 ```json
 {
   "action": "create_bot",
+  "user_id": "user-1",
+  "portfolio_id": "portfolio-1",
+  "market": "xag",
+  "strategy": "ema_wall_v1",
+  "simulator_task_id": "sim-task-1",
   "mobile": "09123456789",
   "password": "your-password",
   "domain": "https://hivagold.com",
-  "bot_id": "optional",
-  "strategy": "ema_wall_v1",
-  "room": "xag",
   "run_mode": "simulator",
   "active": false,
-  "metadata": {}
+  "metadata": {
+    "external_source": "signal-provider-a"
+  }
 }
-```
-
-## Full API examples (curl)
-
-```bash
-# health
-curl http://localhost:8005/health
-
-# start runtime
-curl -X POST http://localhost:8005/trading/process \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"start"}'
-
-# status
-curl -X POST http://localhost:8005/trading/process \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"status"}'
-
-# create bot
-curl -X POST http://localhost:8005/trading/process \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"create_bot","mobile":"09123456789","password":"pass","domain":"https://hivagold.com","strategy":"ema_wall_v1","room":"xag","run_mode":"simulator","active":false,"metadata":{}}'
-
-# list bots
-curl -X POST http://localhost:8005/trading/process \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"list_bots"}'
-
-# activate/start bot
-curl -X POST http://localhost:8005/trading/process \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"start_bot","bot_id":"bot-123abc456def"}'
-
-# deactivate/stop bot
-curl -X POST http://localhost:8005/trading/process \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"stop_bot","bot_id":"bot-123abc456def"}'
-
-# remove bot
-curl -X POST http://localhost:8005/trading/process \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"remove_bot","bot_id":"bot-123abc456def"}'
-
-# stop runtime
-curl -X POST http://localhost:8005/trading/process \
-  -H 'Content-Type: application/json' \
-  -d '{"action":"stop"}'
 ```
