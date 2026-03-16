@@ -75,6 +75,13 @@ action_doctor() {
       echo "[WARN] missing manage script for $worker"
     fi
 
+    local env_file="$REPO_ROOT/workers/$worker/.env"
+    if [[ -f "$env_file" ]]; then
+      echo "[OK] env file exists: workers/$worker/.env"
+    else
+      echo "[WARN] missing env file for $worker at workers/$worker/.env"
+    fi
+
     if curl -fsS "http://localhost:$port/health" >/dev/null 2>&1; then
       echo "[OK] $worker health endpoint is reachable on :$port"
     else

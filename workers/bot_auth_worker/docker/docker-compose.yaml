@@ -6,7 +6,7 @@ services:
     image: bot-auth-worker:latest
     container_name: bot-auth-worker
     env_file:
-      - ../.env
+      - ./.env
     ports:
       - "${AUTH_WORKER_PORT:-8002}:8002"
     environment:

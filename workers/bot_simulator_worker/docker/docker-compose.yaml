@@ -6,7 +6,7 @@ services:
     image: bot-simulator-worker:latest
     container_name: bot-simulator-worker
     env_file:
-      - ../.env
+      - ./.env
     ports:
       - "${SIMULATOR_WORKER_PORT:-8007}:8007"
     environment:
