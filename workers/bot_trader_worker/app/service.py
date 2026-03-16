@@ -7,15 +7,12 @@ from typing import Any
 from uuid import uuid4
 
 from config import Config
+from strategies.strategy_base import StrategyBase, BotConfig
+from strategies.resolver import resolve_strategy
 
 
 class TraderWorkerService:
-    """In-memory placeholder service for the trader worker.
-
-    This service intentionally does not implement trading logic yet.
-    It only provides a safe API surface so the rest of the project can
-    integrate step by step.
-    """
+    """In-memory placeholder service for the trader worker."""
 
     def __init__(self, config: Config, logger: logging.Logger):
         self.config = config
@@ -28,6 +25,15 @@ class TraderWorkerService:
         self.logger.info("Trader worker service started")
 
     async def stop(self) -> None:
+        bot_ids = list(self._bots.keys())
+        for bot_id in bot_ids:
+            try:
+                await self.stop_bot(bot_id, reason="service_shutdown")
+            except Exception as exc:
+                self.logger.warning(
+                    "Failed to stop bot %s during shutdown: %s", bot_id, exc
+                )
+
         self.logger.info("Trader worker service stopped")
 
     @staticmethod
@@ -43,15 +49,36 @@ class TraderWorkerService:
             }
         )
 
+    def _build_bot_config(self, bot: dict[str, Any]) -> BotConfig:
+        return BotConfig(
+            bot_id=bot["bot_id"],
+            portfolio_id=bot["portfolio_id"],
+            run_mode=bot["mode"],
+            metadata=bot.get("metadata", {}),
+        )
+
+    def _build_strategy(self, bot: dict[str, Any]) -> StrategyBase:
+        strategy_cls = resolve_strategy(bot["strategy_name"])
+        return strategy_cls(bot["bot_config"])
+
+    def _public_bot(self, bot: dict[str, Any]) -> dict[str, Any]:
+        return {
+            key: value
+            for key, value in bot.items()
+            if key not in {"_strategy", "_task"}
+        }
+
     async def create_bot(self, payload: dict[str, Any]) -> dict[str, Any]:
         async with self._lock:
             bot_id = f"bot-{uuid4().hex[:12]}"
             now = self._now()
+
             bot = {
                 "bot_id": bot_id,
                 "bot_name": payload["bot_name"],
                 "strategy_name": payload["strategy_name"],
                 "market": payload["market"],
+                "portfolio_id": payload["portfolio_id"],
                 "mode": payload["mode"],
                 "description": payload.get("description"),
                 "metadata": payload.get("metadata", {}),
@@ -59,37 +86,75 @@ class TraderWorkerService:
                 "created_at": now,
                 "updated_at": now,
             }
+
+            bot["bot_config"] = self._build_bot_config(bot)
+            bot["_strategy"] = self._build_strategy(bot)
+            bot["_task"] = None
+
             self._bots[bot_id] = bot
             self._append_log(
                 bot_id,
                 "INFO",
-                "Bot created. Trading functionality is not implemented yet.",
+                f"Bot created with strategy={bot['strategy_name']}",
             )
+
             return {
-                "bot": bot,
-                "message": "Bot created successfully. This is a placeholder implementation.",
+                "bot": self._public_bot(bot),
+                "message": "Bot created successfully.",
                 "placeholder": True,
             }
 
     async def remove_bot(
         self, bot_id: str, reason: str | None = None
     ) -> dict[str, Any]:
+        bot = self._bots.get(bot_id)
+        if not bot:
+            raise ValueError("bot not found")
+
+        if bot["status"] == "running":
+            await self.stop_bot(bot_id, reason="remove_bot")
+
         async with self._lock:
             bot = self._bots.get(bot_id)
             if not bot:
                 raise ValueError("bot not found")
+
             bot["status"] = "removed"
             bot["updated_at"] = self._now()
+
             self._append_log(
                 bot_id, "WARNING", f"Bot removed. reason={reason or 'not_provided'}"
             )
+
             return {
                 "bot_id": bot_id,
                 "status": bot["status"],
-                "message": "Bot removed. Placeholder only; no external resources were touched.",
+                "message": "Bot removed successfully.",
                 "updated_at": bot["updated_at"],
                 "placeholder": True,
             }
+
+    async def _run_strategy_task(self, bot_id: str, strategy: StrategyBase) -> None:
+        try:
+            await strategy.start()
+        except asyncio.CancelledError:
+            self._append_log(bot_id, "WARNING", "Strategy task cancelled")
+            raise
+        except Exception as exc:
+            self._append_log(bot_id, "ERROR", f"Strategy task crashed: {exc}")
+            async with self._lock:
+                bot = self._bots.get(bot_id)
+                if bot and bot["status"] != "removed":
+                    bot["status"] = "error"
+                    bot["updated_at"] = self._now()
+        finally:
+            async with self._lock:
+                bot = self._bots.get(bot_id)
+                if bot is not None:
+                    bot["_task"] = None
+                    if bot["status"] == "running":
+                        bot["status"] = "stopped"
+                        bot["updated_at"] = self._now()
 
     async def start_bot(self, bot_id: str, reason: str | None = None) -> dict[str, Any]:
         async with self._lock:
@@ -98,15 +163,31 @@ class TraderWorkerService:
                 raise ValueError("bot not found")
             if bot["status"] == "removed":
                 raise ValueError("removed bot can not be started")
+            if bot["status"] == "running":
+                raise ValueError("bot is already running")
+
+            strategy: StrategyBase = bot["_strategy"]
+            task: asyncio.Task | None = bot["_task"]
+
+            if task is not None and not task.done():
+                raise ValueError("bot task is already active")
+
             bot["status"] = "running"
             bot["updated_at"] = self._now()
+
+            bot["_task"] = asyncio.create_task(
+                self._run_strategy_task(bot_id, strategy),
+                name=f"strategy-{bot_id}",
+            )
+
             self._append_log(
                 bot_id, "INFO", f"Bot started. reason={reason or 'not_provided'}"
             )
+
             return {
                 "bot_id": bot_id,
                 "status": bot["status"],
-                "message": "Bot marked as running. Real worker loop is not implemented yet.",
+                "message": "Bot started successfully.",
                 "updated_at": bot["updated_at"],
                 "placeholder": True,
             }
@@ -118,15 +199,37 @@ class TraderWorkerService:
                 raise ValueError("bot not found")
             if bot["status"] == "removed":
                 raise ValueError("removed bot can not be stopped")
-            bot["status"] = "stopped"
-            bot["updated_at"] = self._now()
+            if bot["status"] != "running":
+                raise ValueError("bot is not running")
+
+            strategy: StrategyBase = bot["_strategy"]
+            task: asyncio.Task | None = bot["_task"]
+
             self._append_log(
-                bot_id, "INFO", f"Bot stopped. reason={reason or 'not_provided'}"
+                bot_id, "INFO", f"Bot stop requested. reason={reason or 'not_provided'}"
             )
+
+        await strategy.stop()
+
+        if task is not None:
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+
+        async with self._lock:
+            bot = self._bots.get(bot_id)
+            if not bot:
+                raise ValueError("bot not found")
+
+            if bot["status"] != "removed":
+                bot["status"] = "stopped"
+                bot["updated_at"] = self._now()
+
             return {
                 "bot_id": bot_id,
                 "status": bot["status"],
-                "message": "Bot marked as stopped. Real shutdown logic is not implemented yet.",
+                "message": "Bot stopped successfully.",
                 "updated_at": bot["updated_at"],
                 "placeholder": True,
             }
@@ -135,20 +238,48 @@ class TraderWorkerService:
         async with self._lock:
             bots = sorted(self._bots.values(), key=lambda item: item["created_at"])
             return {
-                "items": bots,
+                "items": [self._public_bot(bot) for bot in bots],
                 "count": len(bots),
                 "placeholder": True,
             }
 
-    async def get_logs(self, bot_id: str, limit: int) -> dict[str, Any]:
+    async def get_bot_logs(self, bot_id: str, limit: int) -> dict[str, Any]:
         async with self._lock:
-            if bot_id not in self._bots:
+            bot = self._bots.get(bot_id)
+            if not bot:
                 raise ValueError("bot not found")
-            logs = self._logs.get(bot_id, [])[-limit:]
+
+            strategy: StrategyBase = bot["_strategy"]
+            logs = strategy.get_logs()[-limit:]
+
             return {
                 "bot_id": bot_id,
+                "source": "strategy",
                 "items": logs,
                 "count": len(logs),
+                "placeholder": True,
+            }
+
+    async def get_all_logs(self, limit: int) -> dict[str, Any]:
+        async with self._lock:
+            items: list[dict[str, Any]] = []
+
+            for bot_id, bot_logs in self._logs.items():
+                for entry in bot_logs[-limit:]:
+                    items.append(
+                        {
+                            "bot_id": bot_id,
+                            **entry,
+                        }
+                    )
+
+            items.sort(key=lambda item: item["timestamp"])
+            items = items[-limit:]
+
+            return {
+                "source": "service",
+                "items": items,
+                "count": len(items),
                 "placeholder": True,
             }
 
@@ -157,10 +288,16 @@ class TraderWorkerService:
             bot = self._bots.get(bot_id)
             if not bot:
                 raise ValueError("bot not found")
+
+            strategy: StrategyBase = bot["_strategy"]
+            task: asyncio.Task | None = bot["_task"]
+
             return {
                 "bot_id": bot_id,
                 "status": bot["status"],
-                "message": "Placeholder status response. No real trader lifecycle is wired yet.",
+                "strategy_running": strategy.is_running,
+                "task_active": task is not None and not task.done(),
+                "message": "Bot status retrieved successfully.",
                 "updated_at": bot["updated_at"],
                 "placeholder": True,
             }

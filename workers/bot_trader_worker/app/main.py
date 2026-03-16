@@ -1,6 +1,6 @@
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query
 
 from config import get_config
 from .logging_setup import setup_logger
@@ -30,7 +30,9 @@ app = FastAPI(title=config.APP_NAME, version=config.APP_VERSION, lifespan=lifesp
 @app.get("/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     return HealthResponse(
-        status="healthy", app_name=config.APP_NAME, version=config.APP_VERSION
+        status="healthy",
+        app_name=config.APP_NAME,
+        version=config.APP_VERSION,
     )
 
 
@@ -48,11 +50,14 @@ async def create_bot(payload: TraderBotCreateRequest):
 @app.delete("/trader/bots/{bot_id}", response_model=GenericResultResponse)
 async def remove_bot(
     bot_id: str,
-    payload: TraderBotActionRequest | None = None
+    payload: TraderBotActionRequest | None = None,
 ):
     try:
         reason = payload.reason if payload else None
-        return {"success": True, "result": await service.remove_bot(bot_id, reason)}
+        return {
+            "success": True,
+            "result": await service.remove_bot(bot_id, reason),
+        }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -61,11 +66,13 @@ async def remove_bot(
 async def start_bot(
     bot_id: str,
     payload: TraderBotActionRequest | None = None,
-    ,
 ):
     try:
         reason = payload.reason if payload else None
-        return {"success": True, "result": await service.start_bot(bot_id, reason)}
+        return {
+            "success": True,
+            "result": await service.start_bot(bot_id, reason),
+        }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -73,11 +80,14 @@ async def start_bot(
 @app.post("/trader/bots/{bot_id}/stop", response_model=GenericResultResponse)
 async def stop_bot(
     bot_id: str,
-    payload: TraderBotActionRequest | None = None
+    payload: TraderBotActionRequest | None = None,
 ):
     try:
         reason = payload.reason if payload else None
-        return {"success": True, "result": await service.stop_bot(bot_id, reason)}
+        return {
+            "success": True,
+            "result": await service.stop_bot(bot_id, reason),
+        }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -90,14 +100,23 @@ async def list_bot():
         raise HTTPException(status_code=400, detail=str(exc))
 
 
-@app.get("/trader/bots/{bot_id}/logs", response_model=GenericResultResponse)
-async def get_logs(
-    bot_id: str,
+@app.get("/trader/bots/logs", response_model=GenericResultResponse)
+async def get_all_logs(
     limit: int = Query(default=100, ge=1, le=1000),
-    ,
 ):
     try:
-        return {"success": True, "result": await service.get_logs(bot_id, limit)}
+        return {"success": True, "result": await service.get_all_logs(limit)}
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/trader/bots/{bot_id}/logs", response_model=GenericResultResponse)
+async def get_bot_logs(
+    bot_id: str,
+    limit: int = Query(default=100, ge=1, le=1000),
+):
+    try:
+        return {"success": True, "result": await service.get_bot_logs(bot_id, limit)}
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
