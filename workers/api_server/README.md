@@ -1,10 +1,15 @@
 # API Server Worker
 
-Public gateway for auth and trading task bot operations.
+## Purpose
+
+`api_server` is the public gateway. It forwards:
+- auth requests to `bot_auth_worker`
+- trading/task bot requests to `bot_trading_worker`
 
 Base URL: `http://localhost:8000`
 
 ## Endpoints
+
 - `GET /health`
 - `POST /login`
 - `POST /logout`
@@ -15,46 +20,30 @@ Base URL: `http://localhost:8000`
 - `POST /tasks/status`
 - `POST /tasks/logs`
 
-## Full test example (curl)
+## Bot create payload
 
-```bash
-# login first (to save cookies/headers in auth storage)
-curl -X POST http://localhost:8000/login \
-  -H 'Content-Type: application/json' \
-  -d '{"mobile":"09123456789","password":"pass","base_domain":"https://hivagold.com"}'
+```json
+{
+  "user_id": "user-1",
+  "portfolio_id": "portfolio-1",
+  "market": "xag",
+  "strategy": "ema_wall_v1",
+  "simulator_task_id": "sim-task-1",
+  "mobile": "09123456789",
+  "password": "pass",
+  "domain": "https://hivagold.com",
+  "run_mode": "simulator",
+  "active": false,
+  "metadata": {
+    "external_source": "signal-provider-a"
+  }
+}
+```
 
-# create bot
-curl -X POST http://localhost:8000/bots/create \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "user_id":"user-1",
-    "portfolio_id":"portfolio-1",
-    "market":"xag",
-    "strategy":"simple_position_test_v1",
-    "simulator_task_id":"sim-task-123",
-    "mobile":"09123456789",
-    "password":"pass",
-    "domain":"https://hivagold.com",
-    "run_mode":"simulator",
-    "active":false,
-    "metadata":{
-      "external_source":"manual-test",
-      "ws_streams":["price","wall"]
-    }
-  }'
+Use `/tasks/status` and `/tasks/logs` with:
 
-# start bot by id
-curl -X POST http://localhost:8000/bots/start \
-  -H 'Content-Type: application/json' \
-  -d '{"bot_id":"bot-xxxxxxxxxxxx"}'
-
-# get task status
-curl -X POST http://localhost:8000/tasks/status \
-  -H 'Content-Type: application/json' \
-  -d '{"task_id":"task-xxxxxxxxxxxxxxxx"}'
-
-# get task logs
-curl -X POST http://localhost:8000/tasks/logs \
-  -H 'Content-Type: application/json' \
-  -d '{"task_id":"task-xxxxxxxxxxxxxxxx"}'
+```json
+{
+  "task_id": "task-xxxxxxxxxxxxxxxx"
+}
 ```

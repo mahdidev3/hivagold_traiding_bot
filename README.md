@@ -1,20 +1,20 @@
 # Hivagold Trading Bot
 
-Task-based trading bot platform.
+This codebase now focuses on task-based trading bots.
 
-## Core model
-A bot task is identified by:
+## Trading task model
+
+A trading bot is created with:
 - `portfolio_id`
 - `market`
 - `strategy`
 - `user_id`
 
-A deterministic `task_id` is generated from this tuple.
+From these, worker generates a deterministic `task_id`. Multiple bots can run under the same `task_id`.
 
-## Notes
-- Each active bot creates its own WS/session using saved auth cookies/headers.
-- Streams can be chosen per task using `metadata.ws_streams`.
-- Current focus is `run_mode=simulator`.
+Current execution target is simulator mode (`run_mode=simulator`) with flexible architecture for future real integration.
+
+## API server endpoints
 
 ## Quick API list (gateway)
 - `POST /login`
@@ -22,10 +22,5 @@ A deterministic `task_id` is generated from this tuple.
 - `POST /bots/create`
 - `POST /bots/start`
 - `POST /bots/stop`
-- `POST /bots/remove`
 - `POST /tasks/status`
 - `POST /tasks/logs`
-
-See detailed curl flows in:
-- `workers/api_server/README.md`
-- `workers/bot_trading_worker/README.md`

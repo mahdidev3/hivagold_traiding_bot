@@ -66,10 +66,7 @@ class TradingWorkerService:
         self._bot_configs: dict[str, BotThreadConfig] = {}
         self._latest_events: dict[str, dict[str, Any]] = {}
         self._task_logs: dict[str, list[dict[str, Any]]] = {}
-        self._strategies: dict[str, Any] = {
-            EmaWallStrategyModule.name: EmaWallStrategyModule(config),
-            SimplePositionTestStrategyModule.name: SimplePositionTestStrategyModule(config),
-        }
+        self._strategies: dict[str, Any] = {EmaWallStrategyModule.name: EmaWallStrategyModule(config)}
         self._bots_cache_mtime: float | None = None
         self._bots_cache: list[BotThreadConfig] = []
 
@@ -194,13 +191,10 @@ class TradingWorkerService:
         portfolio_id = str(args.get("portfolio_id", "")).strip()
         market = str(args.get("market", args.get("room", ""))).strip()
         strategy = str(args.get("strategy", "pending")).strip() or "pending"
-        mobile = normalize_mobile(str(args.get("mobile", "")).strip())
-        password = str(args.get("password", "")).strip()
-        domain = str(args.get("domain", "")).strip()
         if not user_id or not portfolio_id or not market or not strategy:
             return {"success": False, "error": "user_id, portfolio_id, market and strategy are required"}
-        if not mobile or not password or not domain:
-            return {"success": False, "error": "mobile, password and domain are required"}
+
+        task_id = self._build_task_id(portfolio_id, market, strategy, user_id)
 
         task_id = self._build_task_id(portfolio_id, market, strategy, user_id)
 
@@ -210,9 +204,9 @@ class TradingWorkerService:
             market=market,
             strategy=strategy,
             simulator_task_id=str(args.get("simulator_task_id", "")).strip() or None,
-            mobile=mobile,
-            password=password,
-            domain=domain,
+            mobile=normalize_mobile(str(args.get("mobile", "")).strip()),
+            password=str(args.get("password", "")).strip(),
+            domain=str(args.get("domain", "")).strip(),
             run_mode=str(args.get("run_mode", "simulator")).strip() or "simulator",
             active=bool(args.get("active", False)),
             task_id=task_id,
@@ -516,10 +510,6 @@ class TradingWorkerService:
             "event": event,
             "payload": payload,
         }
-
-    def _market_ws_path(self, market: str, stream: str) -> str:
-        normalized_market = (market or "xag").strip().lower()
-        return f"/{normalized_market}/ws/{normalized_market}/{stream}/"
 
     def _ws_urls(self, domain: str, bot: BotThreadConfig) -> dict[str, str]:
         normalized = normalize_base_url(domain)
