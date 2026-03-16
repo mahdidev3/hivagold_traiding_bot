@@ -37,7 +37,9 @@ class WsMetadataStrategy(StrategyBase):
         timeout = aiohttp.ClientTimeout(total=None, sock_connect=30, sock_read=None)
         connector = aiohttp.TCPConnector(ssl=False)
 
-        async with aiohttp.ClientSession(timeout=timeout, connector=connector) as session:
+        async with aiohttp.ClientSession(
+            timeout=timeout, connector=connector
+        ) as session:
             tasks = [
                 asyncio.create_task(
                     self._consume_stream(
@@ -93,9 +95,30 @@ class WsMetadataStrategy(StrategyBase):
         normalized["phone_number"] = str(phone_number)
 
         for target_key, *aliases in (
-            ("price_ws_url", "price_ws_url", "price_websocket", "price_websocket_url", "websocket_price", "price_ws"),
-            ("candle_ws_url", "candle_ws_url", "candle_websocket", "candle_websocket_url", "websocket_candle", "candle_ws"),
-            ("wall_ws_url", "wall_ws_url", "wall_websocket", "wall_websocket_url", "websocket_wall", "wall_ws"),
+            (
+                "price_ws_url",
+                "price_ws_url",
+                "price_websocket",
+                "price_websocket_url",
+                "websocket_price",
+                "price_ws",
+            ),
+            (
+                "candle_ws_url",
+                "candle_ws_url",
+                "candle_websocket",
+                "candle_websocket_url",
+                "websocket_candle",
+                "candle_ws",
+            ),
+            (
+                "wall_ws_url",
+                "wall_ws_url",
+                "wall_websocket",
+                "wall_websocket_url",
+                "websocket_wall",
+                "wall_ws",
+            ),
         ):
             value = self._pick_value(metadata, *aliases)
             if not value:
@@ -143,7 +166,9 @@ class WsMetadataStrategy(StrategyBase):
         self.log("INFO", f"Loaded auth session for domain: {domain}")
 
         if not session_data:
-            raise ValueError(f"session data empty for domain '{domain}' in {user_info_path}")
+            raise ValueError(
+                f"session data empty for domain '{domain}' in {user_info_path}"
+            )
 
         return session_data
 
@@ -223,7 +248,11 @@ class WsMetadataStrategy(StrategyBase):
             raise RuntimeError(f"[{stream_name}] websocket error: {message.data}")
 
         if message.type in {WSMsgType.CLOSE, WSMsgType.CLOSED, WSMsgType.CLOSING}:
-            self.log("WARNING", f"[{stream_name}] websocket closed: {message.type.name}")
+            self.log(
+                "WARNING", f"[{stream_name}] websocket closed: {message.type.name}"
+            )
             return
 
-        self.log("INFO", f"[{stream_name}] ignored websocket message type: {message.type}")
+        self.log(
+            "INFO", f"[{stream_name}] ignored websocket message type: {message.type}"
+        )

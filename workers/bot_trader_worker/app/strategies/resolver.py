@@ -1,14 +1,21 @@
 from __future__ import annotations
 
+
 from .strategy_base import StrategyBase
 from .sample_strategy import SampleStrategy
-from .ws_metadata_strategy import WsMetadataStrategy
 
+try:
+    from .ws_metadata_strategy import WsMetadataStrategy
+except ImportError as err:
+    print(err)
+    WsMetadataStrategy = None
 
 STRATEGY_REGISTRY: dict[str, type[StrategyBase]] = {
     "sample_strategy": SampleStrategy,
-    "ws_metadata_strategy": WsMetadataStrategy,
 }
+
+if WsMetadataStrategy is not None:
+    STRATEGY_REGISTRY["ws_metadata_strategy"] = WsMetadataStrategy
 
 
 def resolve_strategy(strategy_name: str) -> type[StrategyBase]:

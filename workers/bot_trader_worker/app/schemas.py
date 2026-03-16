@@ -32,6 +32,11 @@ class TraderBotActionRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=250)
 
 
+class TraderBotCommandRequest(BaseModel):
+    command: str = Field(min_length=1, max_length=128)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
 class TraderBotSummary(BaseModel):
     bot_id: str
     bot_name: str

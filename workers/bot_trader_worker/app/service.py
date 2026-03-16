@@ -2,17 +2,30 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from threading import Lock, Thread
 from typing import Any
 from uuid import uuid4
 
 from config import Config
-from .strategies.strategy_base import StrategyBase, BotConfig
+from .strategies.strategy_base import BotConfig, StrategyBase
 from .strategies.resolver import resolve_strategy
 
 
+@dataclass
+class BotRuntime:
+    strategy: StrategyBase
+    thread: Thread | None = None
+    lock: Lock | None = None
+
+    def __post_init__(self) -> None:
+        if self.lock is None:
+            self.lock = Lock()
+
+
 class TraderWorkerService:
-    """In-memory placeholder service for the trader worker."""
+    """Thread-based in-memory trader worker service."""
 
     def __init__(self, config: Config, logger: logging.Logger):
         self.config = config
@@ -28,7 +41,9 @@ class TraderWorkerService:
         bot_ids = list(self._bots.keys())
         for bot_id in bot_ids:
             try:
-                await self.stop_bot(bot_id, reason="service_shutdown")
+                bot = self._bots.get(bot_id)
+                if bot and bot["status"] == "running":
+                    await self.stop_bot(bot_id, reason="service_shutdown")
             except Exception as exc:
                 self.logger.warning(
                     "Failed to stop bot %s during shutdown: %s", bot_id, exc
@@ -62,11 +77,33 @@ class TraderWorkerService:
         return strategy_cls(bot["bot_config"])
 
     def _public_bot(self, bot: dict[str, Any]) -> dict[str, Any]:
-        return {
-            key: value
-            for key, value in bot.items()
-            if key not in {"_strategy", "_task"}
-        }
+        return {key: value for key, value in bot.items() if key not in {"_runtime"}}
+
+    def _run_strategy_thread(self, bot_id: str) -> None:
+        bot = self._bots.get(bot_id)
+        if not bot:
+            return
+
+        runtime: BotRuntime = bot["_runtime"]
+        strategy = runtime.strategy
+
+        try:
+            self._append_log(bot_id, "INFO", "Worker thread entered")
+            strategy.start()
+        except Exception as exc:
+            self._append_log(bot_id, "ERROR", f"Strategy thread crashed: {exc}")
+            bot = self._bots.get(bot_id)
+            if bot and bot["status"] != "removed":
+                bot["status"] = "error"
+                bot["updated_at"] = self._now()
+        finally:
+            bot = self._bots.get(bot_id)
+            if bot is not None:
+                runtime.thread = None
+                if bot["status"] == "running":
+                    bot["status"] = "stopped"
+                    bot["updated_at"] = self._now()
+            self._append_log(bot_id, "INFO", "Worker thread exited")
 
     async def create_bot(self, payload: dict[str, Any]) -> dict[str, Any]:
         async with self._lock:
@@ -88,8 +125,8 @@ class TraderWorkerService:
             }
 
             bot["bot_config"] = self._build_bot_config(bot)
-            bot["_strategy"] = self._build_strategy(bot)
-            bot["_task"] = None
+            strategy = self._build_strategy(bot)
+            bot["_runtime"] = BotRuntime(strategy=strategy)
 
             self._bots[bot_id] = bot
             self._append_log(
@@ -134,28 +171,6 @@ class TraderWorkerService:
                 "placeholder": True,
             }
 
-    async def _run_strategy_task(self, bot_id: str, strategy: StrategyBase) -> None:
-        try:
-            await strategy.start()
-        except asyncio.CancelledError:
-            self._append_log(bot_id, "WARNING", "Strategy task cancelled")
-            raise
-        except Exception as exc:
-            self._append_log(bot_id, "ERROR", f"Strategy task crashed: {exc}")
-            async with self._lock:
-                bot = self._bots.get(bot_id)
-                if bot and bot["status"] != "removed":
-                    bot["status"] = "error"
-                    bot["updated_at"] = self._now()
-        finally:
-            async with self._lock:
-                bot = self._bots.get(bot_id)
-                if bot is not None:
-                    bot["_task"] = None
-                    if bot["status"] == "running":
-                        bot["status"] = "stopped"
-                        bot["updated_at"] = self._now()
-
     async def start_bot(self, bot_id: str, reason: str | None = None) -> dict[str, Any]:
         async with self._lock:
             bot = self._bots.get(bot_id)
@@ -166,23 +181,26 @@ class TraderWorkerService:
             if bot["status"] == "running":
                 raise ValueError("bot is already running")
 
-            strategy: StrategyBase = bot["_strategy"]
-            task: asyncio.Task | None = bot["_task"]
+            runtime: BotRuntime = bot["_runtime"]
+            if runtime.thread is not None and runtime.thread.is_alive():
+                raise ValueError("bot thread is already active")
 
-            if task is not None and not task.done():
-                raise ValueError("bot task is already active")
+            thread = Thread(
+                target=self._run_strategy_thread,
+                args=(bot_id,),
+                name=f"strategy-{bot_id}",
+                daemon=True,
+            )
 
+            runtime.thread = thread
             bot["status"] = "running"
             bot["updated_at"] = self._now()
-
-            bot["_task"] = asyncio.create_task(
-                self._run_strategy_task(bot_id, strategy),
-                name=f"strategy-{bot_id}",
-            )
 
             self._append_log(
                 bot_id, "INFO", f"Bot started. reason={reason or 'not_provided'}"
             )
+
+            thread.start()
 
             return {
                 "bot_id": bot_id,
@@ -202,20 +220,18 @@ class TraderWorkerService:
             if bot["status"] != "running":
                 raise ValueError("bot is not running")
 
-            strategy: StrategyBase = bot["_strategy"]
-            task: asyncio.Task | None = bot["_task"]
+            runtime: BotRuntime = bot["_runtime"]
+            strategy: StrategyBase = runtime.strategy
+            thread = runtime.thread
 
             self._append_log(
                 bot_id, "INFO", f"Bot stop requested. reason={reason or 'not_provided'}"
             )
 
-        await strategy.stop()
+            strategy.stop()
 
-        if task is not None:
-            try:
-                await task
-            except asyncio.CancelledError:
-                pass
+        if thread is not None:
+            thread.join(timeout=10)
 
         async with self._lock:
             bot = self._bots.get(bot_id)
@@ -230,6 +246,39 @@ class TraderWorkerService:
                 "bot_id": bot_id,
                 "status": bot["status"],
                 "message": "Bot stopped successfully.",
+                "updated_at": bot["updated_at"],
+                "placeholder": True,
+            }
+
+    async def send_command(
+        self,
+        bot_id: str,
+        command: str,
+        payload: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        async with self._lock:
+            bot = self._bots.get(bot_id)
+            if not bot:
+                raise ValueError("bot not found")
+            if bot["status"] == "removed":
+                raise ValueError("removed bot can not receive commands")
+
+            runtime: BotRuntime = bot["_runtime"]
+            strategy: StrategyBase = runtime.strategy
+            strategy.submit_command(command, payload or {})
+            bot["updated_at"] = self._now()
+
+            self._append_log(
+                bot_id,
+                "INFO",
+                f"Command submitted command={command} payload={payload or {}}",
+            )
+
+            return {
+                "bot_id": bot_id,
+                "command": command,
+                "accepted": True,
+                "message": "Command submitted successfully.",
                 "updated_at": bot["updated_at"],
                 "placeholder": True,
             }
@@ -249,8 +298,8 @@ class TraderWorkerService:
             if not bot:
                 raise ValueError("bot not found")
 
-            strategy: StrategyBase = bot["_strategy"]
-            logs = strategy.get_logs()[-limit:]
+            runtime: BotRuntime = bot["_runtime"]
+            logs = runtime.strategy.get_logs()[-limit:]
 
             return {
                 "bot_id": bot_id,
@@ -289,14 +338,14 @@ class TraderWorkerService:
             if not bot:
                 raise ValueError("bot not found")
 
-            strategy: StrategyBase = bot["_strategy"]
-            task: asyncio.Task | None = bot["_task"]
+            runtime: BotRuntime = bot["_runtime"]
+            thread = runtime.thread
 
             return {
                 "bot_id": bot_id,
                 "status": bot["status"],
-                "strategy_running": strategy.is_running,
-                "task_active": task is not None and not task.done(),
+                "strategy_running": runtime.strategy.is_running,
+                "thread_active": thread is not None and thread.is_alive(),
                 "message": "Bot status retrieved successfully.",
                 "updated_at": bot["updated_at"],
                 "placeholder": True,

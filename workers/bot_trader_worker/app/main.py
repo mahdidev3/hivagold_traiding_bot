@@ -8,6 +8,7 @@ from .schemas import (
     GenericResultResponse,
     HealthResponse,
     TraderBotActionRequest,
+    TraderBotCommandRequest,
     TraderBotCreateRequest,
 )
 from .service import TraderWorkerService
@@ -87,6 +88,24 @@ async def stop_bot(
         return {
             "success": True,
             "result": await service.stop_bot(bot_id, reason),
+        }
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/trader/bots/{bot_id}/commands", response_model=GenericResultResponse)
+async def send_bot_command(
+    bot_id: str,
+    payload: TraderBotCommandRequest,
+):
+    try:
+        return {
+            "success": True,
+            "result": await service.send_command(
+                bot_id=bot_id,
+                command=payload.command,
+                payload=payload.payload,
+            ),
         }
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
