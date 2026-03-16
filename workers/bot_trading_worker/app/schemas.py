@@ -21,10 +21,27 @@ class TradingBotContext(BaseModel):
 
 
 class ProcessTradingRequest(BaseModel):
-    action: Literal["start", "stop", "status", "list_bots", "activate_bot", "deactivate_bot"]
+    action: Literal[
+        "start",
+        "stop",
+        "status",
+        "list_bots",
+        "activate_bot",
+        "deactivate_bot",
+        "create_bot",
+        "remove_bot",
+        "start_bot",
+        "stop_bot",
+    ]
     mobile: Optional[str] = None
+    password: Optional[str] = None
     domain: Optional[str] = None
     bot_id: Optional[str] = None
+    strategy: Optional[str] = "pending"
+    room: Optional[str] = "xag"
+    run_mode: Optional[str] = "simulator"
+    active: Optional[bool] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class WorkerBaseResponse(BaseModel):
