@@ -33,13 +33,13 @@ async def _run_activation_id_flow_test():
         strategy="ema_wall_v1",
         active=False,
     )
-    key = service._user_key(bot.mobile, bot.domain)
-    service._bot_configs[key] = bot
+    bot_id = service._new_bot_id()
+    service._bot_configs[bot_id] = bot
 
     activated = await service.process({"action": "activate_bot", "mobile": bot.mobile, "domain": bot.domain})
     assert activated["success"] is True
-    bot_id = activated["result"]["bot_id"]
-    assert bot_id
+    activated_bot_id = activated["result"]["bot_id"]
+    assert activated_bot_id == bot_id
     assert activated["result"]["strategy"] == "ema_wall_v1"
 
     status = await service.process({"action": "status"})
