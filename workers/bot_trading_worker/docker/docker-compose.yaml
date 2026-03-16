@@ -1,7 +1,0 @@
-services:
-  bot-trading-worker:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile
-    ports:
-      - "8005:8005"
