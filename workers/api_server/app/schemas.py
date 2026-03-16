@@ -21,59 +21,24 @@ class LogoutRequest(BaseModel):
     base_domain: Optional[str] = None
 
 
+class BotCreateRequest(BaseModel):
+    mobile: str
+    password: str
+    domain: str
+    strategy: str = "pending"
+    room: str = "xag"
+    run_mode: str = "simulator"
+    active: bool = False
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class BotRefRequest(BaseModel):
+    bot_id: Optional[str] = None
+    mobile: Optional[str] = None
+    domain: Optional[str] = None
+
+
 class ApiActionResponse(BaseModel):
     success: bool
     data: Optional[Any] = None
     error: Optional[str] = None
-
-
-class RoomActionRequest(BaseModel):
-    mobile: str
-    base_domain: Optional[str] = None
-    market: Optional[str] = "xag"
-    payload: dict[str, Any] = Field(default_factory=dict)
-
-
-class RoomStatusRequest(BaseModel):
-    mobile: str
-    base_domain: Optional[str] = None
-    market: str = "xag"
-
-
-class RoomStatusResponse(BaseModel):
-    success: bool
-    market: str
-    is_open: bool
-    active: Optional[bool] = None
-    reason: Optional[str] = None
-    notification: Optional[str] = None
-
-
-class PortfolioRuleRequest(BaseModel):
-    user_id: str
-    rule: dict[str, Any]
-
-
-class PortfolioOrderRequest(BaseModel):
-    user_id: str
-    side: str
-    entry_type: str = "market"
-    entry_price: Optional[float] = None
-    take_profit: float
-    stop_loss: float
-    volume: Optional[float] = None
-    symbol: str = "xag"
-
-
-class PortfolioBotOrderRequest(BaseModel):
-    user_id: str
-    side: str
-    take_profit: float
-    stop_loss: float
-    volume: Optional[float] = None
-    symbol: str = "xag"
-
-
-class PortfolioPriceTickRequest(BaseModel):
-    symbol: str = "xag"
-    price: float
