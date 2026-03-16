@@ -60,21 +60,29 @@ class TraderWorkerService:
                 "updated_at": now,
             }
             self._bots[bot_id] = bot
-            self._append_log(bot_id, "INFO", "Bot created. Trading functionality is not implemented yet.")
+            self._append_log(
+                bot_id,
+                "INFO",
+                "Bot created. Trading functionality is not implemented yet.",
+            )
             return {
                 "bot": bot,
                 "message": "Bot created successfully. This is a placeholder implementation.",
                 "placeholder": True,
             }
 
-    async def remove_bot(self, bot_id: str, reason: str | None = None) -> dict[str, Any]:
+    async def remove_bot(
+        self, bot_id: str, reason: str | None = None
+    ) -> dict[str, Any]:
         async with self._lock:
             bot = self._bots.get(bot_id)
             if not bot:
                 raise ValueError("bot not found")
             bot["status"] = "removed"
             bot["updated_at"] = self._now()
-            self._append_log(bot_id, "WARNING", f"Bot removed. reason={reason or 'not_provided'}")
+            self._append_log(
+                bot_id, "WARNING", f"Bot removed. reason={reason or 'not_provided'}"
+            )
             return {
                 "bot_id": bot_id,
                 "status": bot["status"],
@@ -92,7 +100,9 @@ class TraderWorkerService:
                 raise ValueError("removed bot can not be started")
             bot["status"] = "running"
             bot["updated_at"] = self._now()
-            self._append_log(bot_id, "INFO", f"Bot started. reason={reason or 'not_provided'}")
+            self._append_log(
+                bot_id, "INFO", f"Bot started. reason={reason or 'not_provided'}"
+            )
             return {
                 "bot_id": bot_id,
                 "status": bot["status"],
@@ -110,7 +120,9 @@ class TraderWorkerService:
                 raise ValueError("removed bot can not be stopped")
             bot["status"] = "stopped"
             bot["updated_at"] = self._now()
-            self._append_log(bot_id, "INFO", f"Bot stopped. reason={reason or 'not_provided'}")
+            self._append_log(
+                bot_id, "INFO", f"Bot stopped. reason={reason or 'not_provided'}"
+            )
             return {
                 "bot_id": bot_id,
                 "status": bot["status"],
