@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-
 from .strategy_base import StrategyBase
 from .sample_strategy import SampleStrategy
+from .client_test_strategy import ClientTestStrategy
 
 try:
     from .ws_metadata_strategy import WsMetadataStrategy
@@ -12,6 +12,7 @@ except ImportError as err:
 
 STRATEGY_REGISTRY: dict[str, type[StrategyBase]] = {
     "sample_strategy": SampleStrategy,
+    "client_test_strategy": ClientTestStrategy,
 }
 
 if WsMetadataStrategy is not None:

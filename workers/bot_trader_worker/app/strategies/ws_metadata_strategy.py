@@ -206,6 +206,9 @@ class WsMetadataStrategy(StrategyBase):
             f"{cookie_name}={cookie_value}"
             for cookie_name, cookie_value in cookies.items()
         )
+        if "Origin" not in headers:
+            headers["Origin"] = "https://hivagold.com"
+
         return headers
 
     async def _consume_stream(
@@ -216,8 +219,6 @@ class WsMetadataStrategy(StrategyBase):
         headers: dict[str, str],
     ) -> None:
         self.log("INFO", f"Connecting to {stream_name} websocket: {ws_url}")
-        if "Origin" not in headers:
-            headers["Origin"] = "https://hivagold.com"
         try:
             async with session.ws_connect(ws_url, headers=headers, heartbeat=30) as ws:
                 self.log("INFO", f"Connected to {stream_name} websocket")
