@@ -163,16 +163,14 @@ class ClientTestStrategy(StrategyBase):
                     f"metadata.task_id={task_id!r} does not exist in simulator"
                 )
             return task_id
-
         task = self.client.find_task(
             portfolio_id=self.config.portfolio_id,
             market=self.market,
             status="open",
         )
         if task:
-            self.log("INFO", f"reusing existing open task id={task['id']}")
-            return str(task["id"])
-
+            self.log("INFO", f"reusing existing open task id={task[0]["id"]}")
+            return str(task[0]["id"])
         result = self.client.create_task(
             portfolio_id=self.config.portfolio_id,
             user_id=str(metadata.get("user_id") or self.config.bot_id),
@@ -198,7 +196,9 @@ class ClientTestStrategy(StrategyBase):
             strategy="client_test_strategy_market_buy",
             fallback_entry_price=start_price,
         )
-        position_id = str(result["position"]["id"])
+        print(f"result: {result}")
+
+        position_id = str(result["id"])
         self.log("INFO", f"created market buy position result={result}")
         return position_id
 
@@ -219,7 +219,7 @@ class ClientTestStrategy(StrategyBase):
             stop_loss=stop_loss,
             strategy="client_test_strategy_limit_sell",
         )
-        position_id = str(result["position"]["id"])
+        position_id = str(result["id"])
         self.log("INFO", f"created limit sell position result={result}")
         return position_id
 

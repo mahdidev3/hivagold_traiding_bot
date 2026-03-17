@@ -1,3 +1,4 @@
 workers/bot_portfolio_worker/data/portfolio_worker.db
 *.db
 /workers/bot_auth_worker/Users
+*.pyc
