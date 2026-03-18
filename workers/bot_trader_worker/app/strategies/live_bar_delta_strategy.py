@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from collections import deque
 from pathlib import Path
 from typing import Any, Optional
 
@@ -14,32 +15,41 @@ from .strategy_base import StrategyBase
 
 class LiveBarDeltaStrategy(StrategyBase):
     """
-    Uses:
-    - HTTP polling for historical/recent bars
-    - live-bars websocket for realtime updates
+    Websocket-only candle builder.
 
-    Rule:
-    - find latest CLOSED bar
-    - compute: close - open
-    - if > threshold_usd, print/log that bar
+    Reads live-bar messages like:
+    {
+        "message": "[candle] {\"M\": \"hivagold\", \"FSYM\": \"ounce\", \"TSYM\": \"gold\", \"TYPE\": \"0\", \"TS\": \"1773823461\", \"P\": \"4985.59\"}"
+    }
+
+    Builds OHLC candles from incoming ticks and prints the latest CLOSED candle.
+
+    Example:
+    - now = 09:20:22
+    - resolution = 1 minute
+    -> latest closed candle is 09:19:00 to 09:19:59
 
     Required metadata:
     {
       "phone_number": "09xxxxxxxxx",
       "domain": "https://hivagold.com",
-      "bars_http_url": "https://hivagold.com/ounce/api/ounce-bars/",
-      "live_bars_ws_url": "wss://hivagold.com/.....",
-      "symbol": "ounce",
-      "resolution": "5",
+      "live_bars_ws_url": "wss://....",
+      "resolution": "1",
       "live_subscribe_message": {...}
     }
     """
 
     def __init__(self, config):
         super().__init__(config)
-        self._bars_by_ts: dict[int, dict[str, float]] = {}
-        self._bars_lock = asyncio.Lock()
         self._session_stop = asyncio.Event()
+        self._bars_lock = asyncio.Lock()
+
+        # bucket_start_ts -> {"ts", "open", "high", "low", "close"}
+        self._bars_by_ts: dict[int, dict[str, float]] = {}
+
+        # raw incoming live-bar messages for last 10 minutes
+        self._recent_ticks: deque[dict[str, float]] = deque()
+
         self._last_reported_closed_bar_ts: Optional[int] = None
 
     def run(self) -> None:
@@ -57,9 +67,9 @@ class LiveBarDeltaStrategy(StrategyBase):
             "INFO",
             (
                 "LiveBarDeltaStrategy started "
-                f"symbol={metadata['symbol']} "
                 f"resolution={metadata['resolution']} "
-                f"threshold_usd={metadata['threshold_usd']}"
+                f"resolution_seconds={metadata['resolution_seconds']} "
+                f"keep_ticks_seconds={metadata['keep_ticks_seconds']}"
             ),
         )
 
@@ -69,10 +79,6 @@ class LiveBarDeltaStrategy(StrategyBase):
             headers=headers,
         ) as session:
             tasks = [
-                asyncio.create_task(
-                    self._bars_poll_loop(session, metadata),
-                    name=f"{self.config.bot_id}-bars-poll-loop",
-                ),
                 asyncio.create_task(
                     self._live_bars_ws_loop(session, metadata, headers),
                     name=f"{self.config.bot_id}-live-bars-ws-loop",
@@ -119,40 +125,32 @@ class LiveBarDeltaStrategy(StrategyBase):
 
         phone_number = metadata.get("phone_number")
         domain = metadata.get("domain")
-        bars_http_url = metadata.get("bars_http_url")
         live_bars_ws_url = metadata.get("live_bars_ws_url")
 
         if not phone_number:
             raise ValueError("metadata.phone_number is required")
         if not domain:
             raise ValueError("metadata.domain is required")
-        if not bars_http_url:
-            raise ValueError("metadata.bars_http_url is required")
         if not live_bars_ws_url:
             raise ValueError("metadata.live_bars_ws_url is required")
 
         normalized["phone_number"] = str(phone_number)
         normalized["domain"] = str(domain).rstrip("/")
-        normalized["bars_http_url"] = str(bars_http_url)
         normalized["live_bars_ws_url"] = str(live_bars_ws_url)
 
         normalized["symbol"] = str(metadata.get("symbol", "ounce"))
-        normalized["resolution"] = str(metadata.get("resolution", "5"))
-        normalized["lookback_seconds"] = int(metadata.get("lookback_seconds", 7200))
-        normalized["bars_poll_interval_seconds"] = int(
-            metadata.get("bars_poll_interval_seconds", 15)
-        )
+        normalized["resolution"] = str(metadata.get("resolution", "1"))
         normalized["decision_interval_seconds"] = float(
-            metadata.get("decision_interval_seconds", 1.0)
+            metadata.get("decision_interval_seconds", 0.5)
         )
-        normalized["threshold_usd"] = float(metadata.get("threshold_usd", 1.5))
         normalized["live_subscribe_message"] = metadata.get("live_subscribe_message")
         normalized["live_ping_message"] = metadata.get("live_ping_message")
         normalized["live_ping_interval_seconds"] = int(
             metadata.get("live_ping_interval_seconds", 30)
         )
-        normalized["max_bars_kept"] = int(metadata.get("max_bars_kept", 5000))
-        normalized["trim_to_bars"] = int(metadata.get("trim_to_bars", 2500))
+
+        # keep last 10 minutes of raw live-bar messages
+        normalized["keep_ticks_seconds"] = int(metadata.get("keep_ticks_seconds", 600))
         normalized["resolution_seconds"] = self._resolution_to_seconds(
             normalized["resolution"]
         )
@@ -257,88 +255,6 @@ class LiveBarDeltaStrategy(StrategyBase):
 
         return headers
 
-    async def _bars_poll_loop(
-        self, session: aiohttp.ClientSession, metadata: dict[str, Any]
-    ) -> None:
-        while not self._stop_event.is_set() and not self._session_stop.is_set():
-            end_ts = int(time.time())
-            start_ts = end_ts - metadata["lookback_seconds"]
-
-            try:
-                bars = await self._fetch_bars(session, metadata, start_ts, end_ts)
-                if bars:
-                    await self._merge_bars(
-                        bars,
-                        max_bars_kept=metadata["max_bars_kept"],
-                        trim_to_bars=metadata["trim_to_bars"],
-                    )
-                    self.log("INFO", f"HTTP poll merged {len(bars)} bars")
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                self.log("ERROR", f"HTTP bars poll failed: {exc}")
-
-            await asyncio.sleep(metadata["bars_poll_interval_seconds"])
-
-    async def _fetch_bars(
-        self,
-        session: aiohttp.ClientSession,
-        metadata: dict[str, Any],
-        start_ts: int,
-        end_ts: int,
-    ) -> list[dict[str, float]]:
-        params = {
-            "symbol": metadata["symbol"],
-            "from": start_ts,
-            "to": end_ts,
-            "resolution": metadata["resolution"],
-        }
-
-        self.log(
-            "INFO",
-            f"Fetching HTTP bars url={metadata['bars_http_url']} params={params}",
-        )
-
-        async with session.get(metadata["bars_http_url"], params=params) as response:
-            text = await response.text()
-
-            if response.status >= 400:
-                raise RuntimeError(
-                    f"HTTP bars request failed status={response.status} body={text[:500]}"
-                )
-
-            payload = json.loads(text)
-
-        if not isinstance(payload, list):
-            raise ValueError("HTTP bars response must be a JSON list")
-
-        normalized: list[dict[str, float]] = []
-        for item in payload:
-            bar = self._extract_http_bar(item)
-            if bar is not None:
-                normalized.append(bar)
-
-        return normalized
-
-    def _extract_http_bar(self, item: Any) -> Optional[dict[str, float]]:
-        if not isinstance(item, dict):
-            return None
-
-        required = ("time", "open", "high", "low", "close")
-        if not all(key in item for key in required):
-            return None
-
-        try:
-            return {
-                "ts": int(item["time"]),
-                "open": float(item["open"]),
-                "high": float(item["high"]),
-                "low": float(item["low"]),
-                "close": float(item["close"]),
-            }
-        except (TypeError, ValueError):
-            return None
-
     async def _live_bars_ws_loop(
         self,
         session: aiohttp.ClientSession,
@@ -350,6 +266,7 @@ class LiveBarDeltaStrategy(StrategyBase):
         while not self._stop_event.is_set() and not self._session_stop.is_set():
             try:
                 self.log("INFO", f"Connecting live-bars websocket: {metadata['live_bars_ws_url']}")
+
                 async with session.ws_connect(
                     metadata["live_bars_ws_url"],
                     headers=headers,
@@ -377,11 +294,18 @@ class LiveBarDeltaStrategy(StrategyBase):
                             break
 
                         if message.type == WSMsgType.TEXT:
-                            await self._handle_live_bars_message(message.data)
+                            await self._handle_live_bars_message(
+                                raw_message=message.data,
+                                keep_ticks_seconds=metadata["keep_ticks_seconds"],
+                                resolution_seconds=metadata["resolution_seconds"],
+                            )
                             continue
 
                         if message.type == WSMsgType.BINARY:
-                            self.log("WARNING", f"live-bars websocket sent binary frame size={len(message.data)}")
+                            self.log(
+                                "WARNING",
+                                f"live-bars websocket sent binary frame size={len(message.data)}",
+                            )
                             continue
 
                         if message.type == WSMsgType.ERROR:
@@ -416,132 +340,124 @@ class LiveBarDeltaStrategy(StrategyBase):
             await asyncio.sleep(interval_seconds)
             await ws.send_json(ping_message)
 
-    async def _handle_live_bars_message(self, raw_message: str) -> None:
+    async def _handle_live_bars_message(
+        self,
+        raw_message: str,
+        keep_ticks_seconds: int,
+        resolution_seconds: int,
+    ) -> None:
+        tick = self._extract_tick_from_ws_message(raw_message)
+        if tick is None:
+            return
+
+        tick_ts = int(tick["ts"])
+        tick_price = float(tick["price"])
+        bucket_start = (tick_ts // resolution_seconds) * resolution_seconds
+
+        async with self._bars_lock:
+            # save raw incoming live-bar message
+            self._recent_ticks.append(tick)
+
+            # keep only last 10 minutes
+            min_allowed_ts = int(time.time()) - keep_ticks_seconds
+            while self._recent_ticks and int(self._recent_ticks[0]["ts"]) < min_allowed_ts:
+                self._recent_ticks.popleft()
+
+            # update / create OHLC candle
+            existing = self._bars_by_ts.get(bucket_start)
+            if existing is None:
+                self._bars_by_ts[bucket_start] = {
+                    "ts": float(bucket_start),
+                    "open": tick_price,
+                    "high": tick_price,
+                    "low": tick_price,
+                    "close": tick_price,
+                }
+            else:
+                existing["high"] = max(float(existing["high"]), tick_price)
+                existing["low"] = min(float(existing["low"]), tick_price)
+                existing["close"] = tick_price
+
+            # trim old candles too
+            # keep a bit more than 10 min to safely cover boundary candles
+            candle_keep_from = min_allowed_ts - (2 * resolution_seconds)
+            old_keys = [ts for ts in self._bars_by_ts.keys() if ts < candle_keep_from]
+            for ts in old_keys:
+                self._bars_by_ts.pop(ts, None)
+
+    def _extract_tick_from_ws_message(self, raw_message: str) -> Optional[dict[str, float]]:
+        """
+        Supports:
+        1) {"message": "[candle] {...json...}"}
+        2) {"message": "{...json...}"}
+        3) direct json payload with TS/P
+        """
         try:
             payload = json.loads(raw_message)
         except json.JSONDecodeError:
             self.log("WARNING", f"Invalid JSON from live-bars websocket: {raw_message[:300]}")
-            return
-
-        bar = self._extract_ws_bar(payload)
-        if bar is None:
-            return
-
-        await self._merge_bars(
-            [bar],
-            max_bars_kept=self.config.metadata.get("max_bars_kept", 5000),
-            trim_to_bars=self.config.metadata.get("trim_to_bars", 2500),
-        )
-
-    def _extract_ws_bar(self, payload: Any) -> Optional[dict[str, float]]:
-        if not isinstance(payload, dict):
             return None
 
-        if all(key in payload for key in ("ts", "open", "high", "low", "close")):
-            try:
-                return {
-                    "ts": int(payload["ts"]),
-                    "open": float(payload["open"]),
-                    "high": float(payload["high"]),
-                    "low": float(payload["low"]),
-                    "close": float(payload["close"]),
-                }
-            except (TypeError, ValueError):
+        candidate: Any = payload
+
+        if isinstance(payload, dict) and "message" in payload:
+            msg = payload["message"]
+
+            if not isinstance(msg, str):
                 return None
 
-        data = payload.get("data")
-        if isinstance(data, dict) and all(
-            key in data for key in ("ts", "open", "high", "low", "close")
-        ):
+            msg = msg.strip()
+            if msg.startswith("[candle]"):
+                msg = msg[len("[candle]"):].strip()
+
             try:
-                return {
-                    "ts": int(data["ts"]),
-                    "open": float(data["open"]),
-                    "high": float(data["high"]),
-                    "low": float(data["low"]),
-                    "close": float(data["close"]),
-                }
-            except (TypeError, ValueError):
+                candidate = json.loads(msg)
+            except json.JSONDecodeError:
+                self.log("WARNING", f"Invalid candle JSON in message field: {msg[:300]}")
                 return None
 
-        if all(key in payload for key in ("time", "open", "high", "low", "close")):
-            try:
-                return {
-                    "ts": int(payload["time"]),
-                    "open": float(payload["open"]),
-                    "high": float(payload["high"]),
-                    "low": float(payload["low"]),
-                    "close": float(payload["close"]),
-                }
-            except (TypeError, ValueError):
-                return None
+        if not isinstance(candidate, dict):
+            return None
 
-        if isinstance(data, dict) and all(
-            key in data for key in ("time", "open", "high", "low", "close")
-        ):
-            try:
-                return {
-                    "ts": int(data["time"]),
-                    "open": float(data["open"]),
-                    "high": float(data["high"]),
-                    "low": float(data["low"]),
-                    "close": float(data["close"]),
-                }
-            except (TypeError, ValueError):
-                return None
+        ts_value = candidate.get("TS")
+        price_value = candidate.get("P")
 
-        return None
+        if ts_value is None or price_value is None:
+            return None
 
-    async def _merge_bars(
-        self,
-        bars: list[dict[str, float]],
-        max_bars_kept: int,
-        trim_to_bars: int,
-    ) -> None:
-        async with self._bars_lock:
-            for bar in bars:
-                self._bars_by_ts[int(bar["ts"])] = bar
-
-            if len(self._bars_by_ts) > max_bars_kept:
-                sorted_ts = sorted(self._bars_by_ts.keys())
-                trim_count = max(0, len(sorted_ts) - trim_to_bars)
-                for ts in sorted_ts[:trim_count]:
-                    self._bars_by_ts.pop(ts, None)
+        try:
+            return {
+                "ts": float(int(ts_value)),
+                "price": float(price_value),
+            }
+        except (TypeError, ValueError):
+            return None
 
     async def _decision_loop(self, metadata: dict[str, Any]) -> None:
         resolution_seconds = metadata["resolution_seconds"]
 
         while not self._stop_event.is_set() and not self._session_stop.is_set():
             try:
-                now_ts = int(time.time())
-                current_bucket_start = (now_ts // resolution_seconds) * resolution_seconds
-                target_closed_bar_ts = current_bucket_start - resolution_seconds
-
-                if (
-                    target_closed_bar_ts >= 0
-                    and target_closed_bar_ts != self._last_reported_closed_bar_ts
-                ):
-                    closed_bar = await self._latest_closed_bar(resolution_seconds)
-                    if closed_bar is not None:
-                        await self._evaluate_closed_bar(
-                            closed_bar,
-                            threshold_usd=metadata["threshold_usd"],
-                        )
+                closed_bar = await self._latest_closed_bar(resolution_seconds)
+                if closed_bar is not None:
+                    await self._print_closed_bar(closed_bar, resolution_seconds)
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 self.log("ERROR", f"Decision loop failed: {exc}")
 
             await asyncio.sleep(metadata["decision_interval_seconds"])
+
     async def _latest_closed_bar(
-        self, resolution_seconds: int
+        self,
+        resolution_seconds: int,
     ) -> Optional[dict[str, float]]:
         now_ts = int(time.time())
 
-        # Start of the currently forming candle
+        # current forming candle bucket
         current_bucket_start = (now_ts // resolution_seconds) * resolution_seconds
 
-        # Start of the most recently CLOSED candle
+        # latest closed candle bucket
         target_closed_bar_ts = current_bucket_start - resolution_seconds
 
         if target_closed_bar_ts < 0:
@@ -552,44 +468,33 @@ class LiveBarDeltaStrategy(StrategyBase):
             if bar is None:
                 return None
             return dict(bar)
-   
-    async def _evaluate_closed_bar(
+
+    async def _print_closed_bar(
         self,
         bar: dict[str, float],
-        threshold_usd: float,
+        resolution_seconds: int,
     ) -> None:
         bar_ts = int(bar["ts"])
 
         if self._last_reported_closed_bar_ts == bar_ts:
             return
 
-        price_diff = float(bar["close"]) - float(bar["open"])
-        is_more_than_threshold = abs(price_diff) > threshold_usd
+        start_ts = bar_ts
+        end_ts = bar_ts + resolution_seconds - 1
+        now_ts = int(time.time())
 
         message = (
-            f"latest_closed_bar "
-            f"ts={bar_ts} "
-            f"tsnow ={int(time.time())}"
-            f"open={bar['open']:.2f} "
-            f"close={bar['close']:.2f} "
-            f"diff={price_diff:.2f} "
-            f"threshold={threshold_usd:.2f} "
-            f"is_more_than_threshold={is_more_than_threshold}"
+            f"latest_closed_candle "
+            f"from={start_ts} "
+            f"to={end_ts} "
+            f"now={now_ts} "
+            f"open={float(bar['open']):.2f} "
+            f"high={float(bar['high']):.2f} "
+            f"low={float(bar['low']):.2f} "
+            f"close={float(bar['close']):.2f}"
         )
 
         print(message, flush=True)
         self.log("INFO", message)
-
-        if is_more_than_threshold:
-            hit_message = (
-                f"BAR HIT: ts={bar_ts} "
-                f"open={bar['open']:.2f} "
-                f"high={bar['high']:.2f} "
-                f"low={bar['low']:.2f} "
-                f"close={bar['close']:.2f} "
-                f"diff={price_diff:.2f}"
-            )
-            print(hit_message, flush=True)
-            self.log("INFO", hit_message)
 
         self._last_reported_closed_bar_ts = bar_ts
